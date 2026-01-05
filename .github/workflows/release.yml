@@ -203,4 +203,4 @@ jobs:
           r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           r2-bucket: orb
           source-dir: ./r2-artifacts
-          destination-dir: /
+          destination-dir: downloads

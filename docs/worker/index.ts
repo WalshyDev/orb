@@ -11,13 +11,14 @@ export default {
     const { pathname } = new URL(req.url);
 
     if (pathname.startsWith('/downloads/')) {
-      const binary = pathname.split('/').pop();
+      const binary = pathname.replace('/downloads/', '');
 
       if (!binary || !BINARY_PATTERN.test(binary)) {
         return this.notFound(env);
       }
 
-      const object = await env.R2.get(binary);
+      // Download from `downloads/{binary}`
+      const object = await env.R2.get(pathname.slice(1));
 
       if (object === null) {
         return this.notFound(env);
