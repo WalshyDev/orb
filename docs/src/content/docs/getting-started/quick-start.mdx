@@ -1,0 +1,171 @@
+---
+title: Quick Start
+description: Make your first HTTP request with orb
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Your First Request
+
+The simplest way to use orb is to pass a URL:
+
+```bash
+orb https://httpbin.org/get
+```
+
+This makes a GET request and prints the response body to stdout.
+
+## Common Operations
+
+### GET Request with Headers
+
+```bash
+orb https://api.example.com/users \
+  -H "Authorization: Bearer token123" \
+  -H "Accept: application/json"
+```
+
+### POST with JSON Data
+
+Use the `--json` flag to send JSON data (automatically sets `Content-Type: application/json`):
+
+```bash
+orb https://api.example.com/users \
+  -X POST \
+  --json '{"name": "Alice", "email": "alice@example.com"}'
+```
+
+### POST with Form Data
+
+```bash
+orb https://api.example.com/login \
+  -X POST \
+  -d "username=alice&password=secret"
+```
+
+### File Upload
+
+Use `-F` for multipart form uploads:
+
+```bash
+orb https://api.example.com/upload \
+  -X POST \
+  -F "file=@/path/to/image.png" \
+  -F "description=My image"
+```
+
+## Viewing Response Details
+
+### Include Response Headers
+
+Use `-i` to print response headers before the body:
+
+```bash
+orb -i https://httpbin.org/get
+```
+
+Output:
+```
+HTTP/2 200 OK
+content-type: application/json
+date: Mon, 01 Jan 2024 00:00:00 GMT
+
+{
+  "args": {},
+  ...
+}
+```
+
+### Headers Only
+
+Use `-I` to only show headers (like a HEAD request):
+
+```bash
+orb -I https://example.com
+```
+
+### Verbose Mode
+
+Use `-v` to see the full request/response exchange:
+
+```bash
+orb -v https://example.com
+```
+
+This shows:
+- DNS resolution
+- TLS handshake details
+- Request headers sent
+- Response headers received
+
+## Authentication
+
+### Basic Auth
+
+```bash
+orb -u username:password https://api.example.com/protected
+```
+
+### Bearer Token
+
+```bash
+orb --bearer "your-token-here" https://api.example.com/protected
+```
+
+## Following Redirects
+
+By default, orb doesn't follow redirects. Use `-L` to follow them:
+
+```bash
+orb -L https://httpbin.org/redirect/3
+```
+
+## Saving Output to a File
+
+```bash
+orb https://example.com/file.zip -o downloaded.zip
+```
+
+For large downloads, orb automatically shows a progress bar.
+
+## WebSocket Connections
+
+Connect to a WebSocket server:
+
+```bash
+# Send a single message
+orb wss://echo.websocket.org --ws-message "Hello!"
+
+# Interactive mode (when TTY is available)
+orb wss://echo.websocket.org
+```
+
+<Aside type="tip">
+In interactive WebSocket mode, type messages and press Enter to send. Use Ctrl+C or Ctrl+D to disconnect.
+</Aside>
+
+## HTTP/2 and HTTP/3
+
+Orb automatically negotiates the best protocol. To force a specific version:
+
+```bash
+# Force HTTP/1.1
+orb --http1.1 https://example.com
+
+# Force HTTP/2
+orb --http2 https://example.com
+
+# Force HTTP/3 (QUIC)
+orb --http3 https://example.com
+```
+
+<Aside type="note">
+HTTP/2 and HTTP/3 require HTTPS. HTTP/3 also requires server support.
+</Aside>
+
+## What's Next?
+
+- [HTTP Requests](/cli/http-requests/) - Learn about methods, headers, and body data
+- [Authentication](/cli/authentication/) - Detailed auth options
+- [TLS & SSL](/cli/tls-ssl/) - Certificate handling
+- [Options Reference](/cli/options-reference/) - Complete list of all options

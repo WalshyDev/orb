@@ -1,0 +1,179 @@
+---
+title: Timeouts & Redirects
+description: Connection timeouts, request timeouts, and redirect handling
+sidebar:
+  order: 11
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Timeouts
+
+### Connection Timeout
+
+Use `--connect-timeout` to set the maximum time for establishing a connection:
+
+```bash
+orb --connect-timeout 5 https://example.com
+```
+
+Default: 10 seconds
+
+This timeout covers:
+- DNS resolution
+- TCP connection establishment
+- TLS handshake
+
+### Total Request Timeout
+
+Use `-m` or `--max-time` to set the maximum total request time:
+
+```bash
+orb -m 30 https://example.com
+```
+
+This timeout covers the entire request, from start to finish, including:
+- Connection establishment
+- Sending the request
+- Receiving the response
+
+<Aside type="note">
+If `-m` is not specified, there's no total timeout limit (but `--connect-timeout` still applies).
+</Aside>
+
+### Timeout Examples
+
+```bash
+# Quick health check - fail fast
+orb --connect-timeout 2 -m 5 https://api.example.com/health
+
+# Allow time for large download
+orb -m 300 https://example.com/large-file.zip -o file.zip
+
+# Slow server, generous timeouts
+orb --connect-timeout 30 -m 120 https://slow-server.example.com
+```
+
+## Redirects
+
+By default, orb does **not** follow HTTP redirects (3xx responses).
+
+### Follow Redirects
+
+Use `-L` or `--location` to follow redirects:
+
+```bash
+orb -L https://httpbin.org/redirect/3
+```
+
+This will follow up to 10 redirects by default.
+
+### Maximum Redirects
+
+Use `--max-redirs` to change the redirect limit:
+
+```bash
+orb -L --max-redirs 5 https://example.com
+```
+
+Default: 10 redirects
+
+### Redirect Examples
+
+```bash
+# Follow redirects (common pattern)
+orb -L https://short.url/abc
+
+# See redirect chain with verbose
+orb -v -L https://httpbin.org/redirect/3
+
+# Limit redirects
+orb -L --max-redirs 2 https://example.com
+```
+
+### Understanding Redirects
+
+Without `-L`, a redirect returns the 3xx response:
+
+```bash
+orb -i https://httpbin.org/redirect/1
+```
+
+```
+HTTP/1.1 302 Found
+location: https://httpbin.org/get
+```
+
+With `-L`, the final response is returned:
+
+```bash
+orb -L -i https://httpbin.org/redirect/1
+```
+
+```
+HTTP/1.1 200 OK
+content-type: application/json
+...
+```
+
+### Redirect Types
+
+Orb follows these redirect status codes:
+- 301 Moved Permanently
+- 302 Found
+- 303 See Other
+- 307 Temporary Redirect
+- 308 Permanent Redirect
+
+<Aside type="caution">
+Be careful with redirects when posting data. Some redirects may change the method or drop the body.
+</Aside>
+
+### Redirect Loop Protection
+
+Orb detects redirect loops and stops:
+
+```
+Error: Too many redirects (11). Maximum is 10. Use --max-redirs to increase.
+```
+
+## Combining Timeouts and Redirects
+
+```bash
+# Follow redirects with timeouts
+orb -L \
+  --connect-timeout 5 \
+  -m 30 \
+  --max-redirs 5 \
+  https://example.com
+
+# Download with redirect following
+orb -L -m 60 https://short.url/download -o file.zip
+```
+
+## Common Patterns
+
+### API Health Check
+
+```bash
+# Quick check with short timeouts
+orb --connect-timeout 2 -m 5 -s https://api.example.com/health && echo "OK"
+```
+
+### Downloading Files (Often Redirected)
+
+```bash
+# GitHub releases redirect to CDN
+orb -L -o release.tar.gz \
+  https://github.com/user/repo/releases/latest/download/release.tar.gz
+```
+
+### URL Shortener Resolution
+
+```bash
+# See where a short URL goes (without following)
+orb -I https://bit.ly/example
+
+# Follow to final destination
+orb -L -I https://bit.ly/example
+```

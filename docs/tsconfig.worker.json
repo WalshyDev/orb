@@ -1,0 +1,10 @@
+{
+    "compilerOptions": {
+        "composite": true,
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "target": "esnext",
+        "types": ["@cloudflare/workers-types/experimental"]
+    },
+    "include": ["worker/*"]
+}

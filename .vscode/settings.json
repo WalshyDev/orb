@@ -1,0 +1,4 @@
+{
+    "chat.useClaudeSkills": true,
+    "claudeCode.initialPermissionMode": "acceptEdits",
+}

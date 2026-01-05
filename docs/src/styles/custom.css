@@ -1,0 +1,249 @@
+/* Orb Documentation - Dark Theme with Orange Accents */
+
+:root {
+  /* Orange accent colors */
+  --sl-color-accent-low: rgba(249, 115, 22, 0.15);
+  --sl-color-accent: #f97316;
+  --sl-color-accent-high: #fb923c;
+
+  /* Ultra dark gray scale */
+  --sl-color-white: #e4e4e7;
+  --sl-color-gray-1: #d4d4d8;
+  --sl-color-gray-2: #a1a1aa;
+  --sl-color-gray-3: #71717a;
+  --sl-color-gray-4: #3f3f46;
+  --sl-color-gray-5: #27272a;
+  --sl-color-gray-6: #18181b;
+  --sl-color-black: #09090b;
+
+  /* Background colors */
+  --sl-color-bg: #09090b;
+  --sl-color-bg-nav: #0f0f11;
+  --sl-color-bg-sidebar: #0f0f11;
+  --sl-color-bg-inline-code: #27272a;
+  --sl-color-hairline: #27272a;
+  --sl-color-hairline-light: #18181b;
+  --sl-color-text: #e4e4e7;
+  --sl-color-text-accent: #f97316;
+}
+
+/* Ensure dark mode is always applied */
+[data-theme="light"] {
+  --sl-color-bg: #09090b;
+  --sl-color-bg-nav: #0f0f11;
+  --sl-color-bg-sidebar: #0f0f11;
+}
+
+/* Code blocks */
+.expressive-code {
+  --ec-codeBg: #18181b;
+  --ec-codeHlLineBg: rgba(249, 115, 22, 0.1);
+  --ec-brdCol: #27272a;
+  --ec-frm-edActTabBg: #27272a;
+  --ec-frm-edTabBg: #18181b;
+}
+
+/* Sidebar styling */
+nav.sidebar {
+  background: #0f0f11;
+  border-right: 1px solid #27272a;
+}
+
+/* Sidebar active link - FIXED: visible text on selection */
+.sidebar-content a[aria-current="page"],
+nav.sidebar a[aria-current="page"],
+starlight-menu-button + nav a[aria-current="page"] {
+  background: rgba(249, 115, 22, 0.15);
+  border-left: 3px solid #f97316;
+  color: #f97316 !important;
+  font-weight: 600;
+}
+
+.sidebar-content a[aria-current="page"]:hover,
+nav.sidebar a[aria-current="page"]:hover {
+  color: #fb923c !important;
+}
+
+/* Sidebar links */
+.sidebar-content a,
+nav.sidebar a {
+  color: #a1a1aa;
+  transition: color 0.15s ease;
+}
+
+.sidebar-content a:hover,
+nav.sidebar a:hover {
+  color: #e4e4e7;
+}
+
+/* Links */
+a:not([class]) {
+  color: #f97316;
+}
+
+a:not([class]):hover {
+  color: #fb923c;
+}
+
+/* Inline code */
+code:not(pre code) {
+  background: #27272a;
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+  color: #fb923c;
+}
+
+/* Blockquotes */
+blockquote {
+  border-left: 3px solid #f97316;
+  background: #18181b;
+  padding: 1rem 1.5rem;
+  margin: 1rem 0;
+}
+
+/* Search */
+.search-input,
+input[type="search"] {
+  background: #18181b;
+  border-color: #27272a;
+  color: #e4e4e7;
+}
+
+/* Cards */
+.card {
+  background: #18181b;
+  border: 1px solid #27272a;
+}
+
+.card:hover {
+  border-color: #f97316;
+}
+
+/* Hero section styling */
+.hero {
+  background: linear-gradient(
+    180deg,
+    #09090b 0%,
+    #0f0f11 100%
+  );
+}
+
+/* Badge styling */
+.sl-badge {
+  --sl-color-bg-badge: rgba(249, 115, 22, 0.2);
+  color: #f97316;
+}
+
+/* Tab styling */
+starlight-tabs [role="tab"] {
+  background: #18181b;
+  border-color: #27272a;
+  color: #a1a1aa;
+}
+
+starlight-tabs [role="tab"][aria-selected="true"] {
+  border-color: #f97316;
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.1);
+}
+
+starlight-tabs [role="tabpanel"] {
+  background: #0f0f11;
+  border-color: #27272a;
+}
+
+/* Aside/callout styling */
+.starlight-aside {
+  background: #18181b;
+  border-color: #27272a;
+}
+
+.starlight-aside--tip {
+  border-color: #f97316;
+}
+
+.starlight-aside--caution {
+  border-color: #eab308;
+}
+
+.starlight-aside--danger {
+  border-color: #ef4444;
+}
+
+/* Header navigation */
+header.header {
+  background: #0f0f11;
+  border-bottom: 1px solid #27272a;
+}
+
+/* Page content area */
+.main-frame {
+  background: #09090b;
+}
+
+.content-panel {
+  background: #09090b;
+}
+
+/* Right sidebar (table of contents) */
+.right-sidebar {
+  background: #0f0f11;
+  border-left: 1px solid #27272a;
+}
+
+.right-sidebar a {
+  color: #71717a;
+}
+
+.right-sidebar a:hover,
+.right-sidebar a[aria-current="true"] {
+  color: #f97316;
+}
+
+/* Pagination links */
+.pagination-links a {
+  background: #18181b;
+  border-color: #27272a;
+  color: #a1a1aa;
+}
+
+.pagination-links a:hover {
+  border-color: #f97316;
+  color: #f97316;
+}
+
+/* Mobile menu */
+@media (max-width: 50rem) {
+  .mobile-menu-toggle {
+    color: #f97316;
+  }
+
+  nav.sidebar {
+    background: #0f0f11;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f992489e;
+}
+
+/* Footer */
+footer {
+  background: #0f0f11;
+  border-top: 1px solid #27272a;
+}

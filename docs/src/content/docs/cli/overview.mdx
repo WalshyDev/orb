@@ -1,0 +1,90 @@
+---
+title: CLI Overview
+description: Introduction to the orb command-line interface
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orb is a modern HTTP client for the command line, designed as a powerful alternative to cURL. Built with Rust, it offers native support for HTTP/1.1, HTTP/2, HTTP/3 (QUIC), and WebSockets.
+
+## Basic Usage
+
+```bash
+orb [OPTIONS] <URL>
+```
+
+The only required argument is the URL. By default, orb makes a GET request and prints the response body to stdout.
+
+```bash
+orb https://api.example.com/users
+```
+
+## Key Features
+
+- **Modern Protocols**: HTTP/1.1, HTTP/2, HTTP/3 with automatic negotiation
+- **WebSocket Support**: First-class WebSocket connections with interactive mode
+- **cURL Compatibility**: Familiar options like `-H`, `-d`, `-X`, `-u`, `-o`
+- **JSON Shorthand**: `--json` flag for easy JSON requests
+- **Compression**: Built-in support for zstd, brotli, gzip, deflate
+- **Progress Bar**: Automatic for large downloads
+- **TLS/mTLS**: Full certificate support including client certificates
+
+## Common Patterns
+
+### API Requests
+
+```bash
+# GET with auth header
+orb https://api.example.com/users -H "Authorization: Bearer token"
+
+# POST JSON
+orb https://api.example.com/users -X POST --json '{"name": "Alice"}'
+
+# PUT with headers
+orb https://api.example.com/users/1 \
+  -X PUT \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Bob"}'
+```
+
+### Download Files
+
+```bash
+# Save to file
+orb https://example.com/file.zip -o file.zip
+
+# With progress bar
+orb https://example.com/large-file.iso -o large-file.iso
+```
+
+### Debug Requests
+
+```bash
+# Show request/response headers
+orb -v https://example.com
+
+# Show timing statistics
+orb -w https://example.com
+```
+
+### WebSockets
+
+```bash
+# Connect and send message
+orb wss://echo.websocket.org --ws-message "Hello"
+
+# Interactive mode
+orb wss://echo.websocket.org
+```
+
+<Aside type="tip">
+Use `-s` (silent mode) to suppress all output except errors. Useful for scripts that only care about exit codes.
+</Aside>
+
+## Next Steps
+
+- [HTTP Requests](/cli/http-requests/) - Methods, headers, body data
+- [Authentication](/cli/authentication/) - Basic auth and bearer tokens
+- [Options Reference](/cli/options-reference/) - Complete list of all options

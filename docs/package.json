@@ -1,0 +1,20 @@
+{
+  "name": "orb-docs",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.37.1",
+    "astro": "5.16.6",
+    "sharp": "0.34.5",
+    "starlight-auto-sidebar": "0.1.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260103.0",
+    "wrangler": "4.56.0"
+  }
+}

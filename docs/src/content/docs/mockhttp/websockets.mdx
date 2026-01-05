@@ -1,0 +1,278 @@
+---
+title: WebSocket Testing
+description: Test WebSocket connections with WebSocketServer
+sidebar:
+    order: 10
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+orb-mockhttp includes a dedicated `WebSocketServer` for testing WebSocket clients.
+
+## Creating a WebSocket Server
+
+### Echo Server
+
+The simplest setup echoes back all messages:
+
+```rust
+use orb_mockhttp::WebSocketServer;
+
+// Without TLS
+let server = WebSocketServer::echo();
+let url = server.url("/ws");  // ws://127.0.0.1:PORT/ws
+
+// With TLS
+let server = WebSocketServer::echo_tls();
+let url = server.url("/ws");  // wss://127.0.0.1:PORT/ws
+```
+
+### Custom Handler
+
+For custom behavior, implement the `WebSocketHandler` trait:
+
+```rust
+use orb_mockhttp::{WebSocketServer, WebSocketHandler};
+use tungstenite::Message;
+
+struct MyHandler;
+
+impl WebSocketHandler for MyHandler {
+    fn handle_message(&self, message: &Message) -> Option<Message> {
+        match message {
+            Message::Text(text) => {
+                // Custom response logic
+                Some(Message::Text(format!("Received: {}", text)))
+            }
+            Message::Binary(data) => {
+                // Echo binary data
+                Some(Message::Binary(data.clone()))
+            }
+            _ => None  // Don't respond to ping/pong/close
+        }
+    }
+}
+
+let server = WebSocketServer::with_handler(Box::new(MyHandler));
+```
+
+## Built-in Handlers
+
+### EchoHandler
+
+Echoes text and binary messages:
+
+```rust
+use orb_mockhttp::EchoHandler;
+
+let server = WebSocketServer::with_handler(Box::new(EchoHandler));
+```
+
+### NoOpHandler
+
+Only responds to ping/close, ignores other messages:
+
+```rust
+use orb_mockhttp::NoOpHandler;
+
+let server = WebSocketServer::with_handler(Box::new(NoOpHandler));
+```
+
+## Server Information
+
+```rust
+let server = WebSocketServer::echo_tls();
+
+// Port number
+let port: u16 = server.port();
+
+// TLS enabled?
+let is_tls: bool = server.is_tls();
+
+// Full URL
+let url = server.url("/path");  // wss://127.0.0.1:PORT/path
+
+// Certificate (for TLS)
+let cert: Option<String> = server.cert_pem();
+```
+
+## Message Tracking
+
+### Get Message Count
+
+```rust
+let count = server.message_count();
+```
+
+### Assert Message Count
+
+```rust
+server.assert_messages(3);  // Panics if not exactly 3 messages
+```
+
+### Get All Messages
+
+```rust
+let messages: Vec<ReceivedWebSocketMessage> = server.get_messages();
+
+for msg in messages {
+    if let Some(text) = msg.text {
+        println!("Text: {}", text);
+    }
+    if let Some(binary) = msg.binary {
+        println!("Binary: {} bytes", binary.len());
+    }
+}
+```
+
+### Get Text Messages Only
+
+```rust
+let texts: Vec<String> = server.get_text_messages();
+for text in texts {
+    println!("Received: {}", text);
+}
+```
+
+### Clear Messages
+
+```rust
+server.clear_messages();
+```
+
+## Complete Example
+
+```rust
+use orb_mockhttp::{WebSocketServer, WebSocketHandler};
+use tungstenite::{connect, Message};
+
+// Test with echo server
+#[tokio::test]
+async fn test_websocket_echo() {
+    let server = WebSocketServer::echo();
+
+    // Connect with a client
+    let (mut socket, _response) = connect(server.url("/ws")).unwrap();
+
+    // Send a message
+    socket.write_message(Message::Text("Hello!".into())).unwrap();
+
+    // Receive echo
+    let msg = socket.read_message().unwrap();
+    assert_eq!(msg, Message::Text("Hello!".into()));
+
+    // Verify server received the message
+    server.assert_messages(1);
+    assert_eq!(server.get_text_messages(), vec!["Hello!"]);
+}
+
+// Test with custom handler
+struct CountingHandler {
+    count: std::sync::atomic::AtomicUsize,
+}
+
+impl WebSocketHandler for CountingHandler {
+    fn handle_message(&self, message: &Message) -> Option<Message> {
+        if let Message::Text(_) = message {
+            let n = self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Some(Message::Text(format!("Message #{}", n + 1)))
+        } else {
+            None
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_custom_handler() {
+    let handler = CountingHandler {
+        count: std::sync::atomic::AtomicUsize::new(0),
+    };
+
+    let server = WebSocketServer::with_handler(Box::new(handler));
+
+    let (mut socket, _) = connect(server.url("/ws")).unwrap();
+
+    socket.write_message(Message::Text("First".into())).unwrap();
+    assert_eq!(socket.read_message().unwrap(), Message::Text("Message #1".into()));
+
+    socket.write_message(Message::Text("Second".into())).unwrap();
+    assert_eq!(socket.read_message().unwrap(), Message::Text("Message #2".into()));
+
+    server.assert_messages(2);
+}
+```
+
+## TLS WebSocket
+
+```rust
+use orb_mockhttp::WebSocketServer;
+use tungstenite::{connect, Connector};
+use native_tls::TlsConnector;
+
+#[tokio::test]
+async fn test_wss() {
+    let server = WebSocketServer::echo_tls();
+
+    // Get the certificate
+    let cert_pem = server.cert_pem().unwrap();
+
+    // Configure TLS connector to trust the certificate
+    let cert = native_tls::Certificate::from_pem(cert_pem.as_bytes()).unwrap();
+    let connector = TlsConnector::builder()
+        .add_root_certificate(cert)
+        .build()
+        .unwrap();
+
+    // Connect with TLS
+    let (mut socket, _) = connect(server.url("/ws")).unwrap();
+
+    socket.write_message(Message::Text("Secure!".into())).unwrap();
+    let response = socket.read_message().unwrap();
+
+    assert_eq!(response, Message::Text("Secure!".into()));
+}
+```
+
+## ReceivedWebSocketMessage
+
+The message tracking uses this struct:
+
+```rust
+pub struct ReceivedWebSocketMessage {
+    pub text: Option<String>,     // Text content (if text message)
+    pub binary: Option<Bytes>,    // Binary content (if binary message)
+    pub is_binary: bool,          // true for binary, false for text
+}
+```
+
+## Server Lifecycle
+
+```rust
+{
+    let server = WebSocketServer::echo();
+    // Server running...
+
+    // ... run tests ...
+
+} // Server shuts down automatically
+
+// Or explicit shutdown
+server.shutdown();
+```
+
+## WebSocketHandler Trait
+
+```rust
+pub trait WebSocketHandler: Send + Sync {
+    /// Handle an incoming message.
+    /// Return Some(Message) to send a response, None to send nothing.
+    fn handle_message(&self, message: &Message) -> Option<Message>;
+}
+```
+
+The `Message` type is from the `tungstenite` crate:
+- `Message::Text(String)` - Text message
+- `Message::Binary(Vec<u8>)` - Binary message
+- `Message::Ping(Vec<u8>)` - Ping frame
+- `Message::Pong(Vec<u8>)` - Pong frame
+- `Message::Close(Option<CloseFrame>)` - Close frame

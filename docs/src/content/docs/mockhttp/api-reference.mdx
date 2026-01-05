@@ -1,0 +1,319 @@
+---
+title: API Reference
+description: Complete API reference for orb-mockhttp
+sidebar:
+    order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Complete reference of all public types and methods in orb-mockhttp.
+
+## TestServerBuilder
+
+Builder for creating mock HTTP servers.
+
+```rust
+impl TestServerBuilder {
+    /// Create a new builder (HTTP/1.1 only, no TLS)
+    pub fn new() -> Self
+
+    /// Enable TLS with auto-generated certificates
+    /// Enables HTTP/1.1, HTTP/2, and HTTP/3
+    pub fn with_tls(self) -> Self
+
+    /// Limit to specific protocols
+    /// Auto-enables TLS if HTTP/2 or HTTP/3 selected
+    pub fn with_protocols(self, protocols: &[HttpProtocol]) -> Self
+
+    /// Use custom certificate files
+    pub fn with_certs(self, cert_path: PathBuf, key_path: PathBuf) -> Self
+
+    /// Use pre-configured TLS config
+    pub fn with_tls_config(self, config: TlsConfig) -> Self
+
+    /// Build and start the server
+    pub fn build(self) -> TestServer
+}
+```
+
+## TestServer
+
+Running mock HTTP server instance.
+
+```rust
+impl TestServer {
+    // Server information
+    pub fn port(&self) -> u16
+    pub fn is_tls(&self) -> bool
+    pub fn supports_protocol(&self, protocol: HttpProtocol) -> bool
+    pub fn protocols(&self) -> &HashSet<HttpProtocol>
+    pub fn url(&self, path: &str) -> String
+    pub fn address(&self) -> String
+    pub fn cert_pem(&self) -> Option<String>
+    pub fn cert_der(&self) -> Option<&[u8]>
+
+    // Route registration
+    pub fn on_request<S: Into<String>>(&self, path: S) -> RouteBuilder
+    pub fn on_request_fn<S, F>(&self, path: S, handler: F) -> &Self
+        where S: Into<String>,
+              F: Fn(&Request) -> Response + Send + Sync + 'static
+    pub fn clear_routes(&self)
+
+    // Request assertions
+    pub fn assert_one_request(&self)
+    pub fn assert_requests(&self, expected_count: usize)
+    pub fn get_raw_request(&self) -> Option<String>
+    pub fn get_raw_requests(&self) -> Vec<String>
+
+    // Lifecycle
+    pub fn shutdown(&self)
+}
+```
+
+## RouteBuilder
+
+Fluent builder for configuring routes.
+
+```rust
+impl RouteBuilder {
+    pub fn new<S: Into<String>>(path: S) -> Self
+
+    // Matchers
+    pub fn expect_method(self, method: &str) -> Self
+    pub fn expect_header<K, V>(self, name: K, value: V) -> Self
+    pub fn expect_header_present(self, name: &'static str) -> Self
+    pub fn expect_body(self, expected: String) -> Self
+    pub fn expect_body_contains(self, substring: String) -> Self
+
+    // Response configuration
+    pub fn respond_with<S: Into<String>>(self, status: u16, body: S) -> Self
+    pub fn respond_with_json<T: Serialize>(self, status: u16, value: &T) -> Self
+    pub fn respond_with_fn<F>(self, handler: F) -> Self
+        where F: Fn(&Request) -> Response + Send + Sync + 'static
+    pub fn respond_with_redirect(self, status: u16, location: &str) -> Self
+    pub fn respond_with_delay<S>(
+        self, status: u16, body: S,
+        chunk_size: usize, chunk_delay: Duration
+    ) -> Self
+
+    // Delays
+    pub fn delay(self, delay: Duration) -> Self
+
+    // Build
+    pub fn build(self) -> Route
+}
+```
+
+## Route
+
+Registered route instance.
+
+```rust
+impl Route {
+    pub fn matches(&self, request: &Request) -> bool
+    pub fn handle(&self, request: &Request) -> Response
+    pub fn call_count(&self) -> usize
+    pub fn assert_called(&self, n: usize)
+    pub fn assert_called_once(&self)
+}
+```
+
+## ResponseBuilder
+
+Fluent builder for constructing responses.
+
+```rust
+impl ResponseBuilder {
+    pub fn new() -> Self  // Defaults to 200 OK
+
+    // Status
+    pub fn status(self, status: u16) -> Self
+
+    // Headers
+    pub fn header<K, V>(self, key: K, value: V) -> Self
+    pub fn headers<I, K, V>(self, headers: I) -> Self
+
+    // Body
+    pub fn body<B: Into<Bytes>>(self, body: B) -> Self
+    pub fn text<S: Into<String>>(self, text: S) -> Self
+    pub fn json<T: Serialize>(self, value: &T) -> Self
+    pub fn html<S: Into<String>>(self, html: S) -> Self
+
+    // Delays
+    pub fn delay(self, delay: Duration) -> Self
+    pub fn chunk_delay(self, delay: Duration) -> Self
+    pub fn chunk_size(self, size: usize) -> Self
+
+    pub fn build(self) -> Response
+}
+```
+
+## Response
+
+Immutable response representation.
+
+```rust
+impl Response {
+    // Constructors
+    pub fn new(status: StatusCode) -> Self
+    pub fn ok() -> Self          // 200 OK
+    pub fn not_found() -> Self   // 404 Not Found
+    pub fn internal_error() -> Self  // 500 Internal Server Error
+
+    // Getters
+    pub fn status(&self) -> StatusCode
+    pub fn headers(&self) -> &HeaderMap
+    pub fn body(&self) -> &Bytes
+    pub fn initial_delay(&self) -> Option<Duration>
+    pub fn chunk_delay(&self) -> Option<Duration>
+    pub fn chunk_size(&self) -> usize
+    pub fn is_streaming(&self) -> bool
+}
+
+// Helper functions
+pub fn text_response<S: Into<String>>(status: u16, body: S) -> Response
+pub fn json_response<T: Serialize>(status: u16, value: &T) -> Response
+```
+
+## Request
+
+Captured incoming HTTP request.
+
+```rust
+impl Request {
+    // Basic properties
+    pub fn method(&self) -> &Method
+    pub fn uri(&self) -> &Uri
+    pub fn path(&self) -> &str
+    pub fn query(&self) -> Option<&str>
+    pub fn version(&self) -> Version
+    pub fn protocol(&self) -> HttpProtocol
+
+    // Headers
+    pub fn headers(&self) -> &HeaderMap
+    pub fn header(&self, name: &str) -> Option<&str>
+    pub fn content_type(&self) -> Option<&str>
+    pub fn content_length(&self) -> Option<usize>
+
+    // Query parameters
+    pub fn query_params(&self) -> HashMap<String, String>
+    pub fn query_param(&self, key: &str) -> Option<&String>
+
+    // Body
+    pub fn body(&self) -> &Bytes
+    pub fn text(&self) -> Result<String, FromUtf8Error>
+    pub fn text_lossy(&self) -> String
+    pub fn json<T: DeserializeOwned>(&self) -> Result<T, serde_json::Error>
+
+    // Helpers
+    pub fn is_method(&self, method: &str) -> bool
+}
+```
+
+## HttpProtocol
+
+HTTP protocol version enum.
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HttpProtocol {
+    Http1,  // HTTP/1.1
+    Http2,  // HTTP/2
+    Http3,  // HTTP/3 (QUIC)
+}
+
+impl HttpProtocol {
+    pub fn all() -> &'static [HttpProtocol]
+}
+```
+
+## TlsConfig
+
+TLS certificate configuration.
+
+```rust
+impl TlsConfig {
+    /// Generate self-signed certificate for localhost/127.0.0.1
+    pub fn generate() -> Self
+
+    /// Load from PEM files
+    pub fn from_files(
+        cert_path: PathBuf,
+        key_path: PathBuf
+    ) -> std::io::Result<Self>
+
+    /// Get PEM-encoded certificate
+    pub fn cert_pem(&self) -> String
+
+    /// Get DER-encoded certificate
+    pub fn cert_der(&self) -> &[u8]
+}
+
+impl Clone for TlsConfig
+```
+
+## WebSocketServer
+
+Mock WebSocket server for testing.
+
+```rust
+impl WebSocketServer {
+    // Constructors
+    pub fn echo() -> Self
+    pub fn echo_tls() -> Self
+    pub fn with_handler(handler: Box<dyn WebSocketHandler>) -> Self
+    pub fn with_handler_tls(handler: Box<dyn WebSocketHandler>) -> Self
+
+    // Server info
+    pub fn port(&self) -> u16
+    pub fn is_tls(&self) -> bool
+    pub fn url(&self, path: &str) -> String
+    pub fn cert_pem(&self) -> Option<String>
+
+    // Message tracking
+    pub fn assert_messages(&self, expected_count: usize)
+    pub fn message_count(&self) -> usize
+    pub fn get_messages(&self) -> Vec<ReceivedWebSocketMessage>
+    pub fn get_text_messages(&self) -> Vec<String>
+    pub fn clear_messages(&self)
+
+    // Lifecycle
+    pub fn shutdown(&self)
+}
+```
+
+## WebSocketHandler
+
+Trait for custom WebSocket message handling.
+
+```rust
+pub trait WebSocketHandler: Send + Sync {
+    fn handle_message(&self, message: &Message) -> Option<Message>;
+}
+
+// Built-in implementations
+pub struct EchoHandler;   // Echoes text and binary messages
+pub struct NoOpHandler;   // Only responds to ping/close
+```
+
+## ReceivedWebSocketMessage
+
+Captured WebSocket message.
+
+```rust
+pub struct ReceivedWebSocketMessage {
+    pub text: Option<String>,
+    pub binary: Option<Bytes>,
+    pub is_binary: bool,
+}
+```
+
+## Re-exports
+
+The crate re-exports these for convenience:
+
+```rust
+pub use http::{Method, StatusCode, Version, HeaderMap};
+pub use bytes::Bytes;
+```

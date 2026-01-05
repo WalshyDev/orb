@@ -1,0 +1,137 @@
+---
+title: Authentication
+description: HTTP authentication methods in orb
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orb supports multiple authentication methods for HTTP requests.
+
+## Basic Authentication
+
+Use `-u` or `--user` with the format `username:password`:
+
+```bash
+orb -u alice:secret123 https://api.example.com/protected
+```
+
+This sends an `Authorization: Basic <base64>` header where `<base64>` is the Base64-encoded `username:password` string.
+
+### Password Prompt
+
+If you omit the password, orb will use an empty password:
+
+```bash
+# Empty password
+orb -u alice: https://api.example.com/protected
+```
+
+<Aside type="caution">
+Be careful with passwords on the command line - they may be visible in shell history and process lists. Consider using environment variables or a secrets manager for sensitive credentials.
+</Aside>
+
+### Example with Environment Variable
+
+```bash
+orb -u "alice:${API_PASSWORD}" https://api.example.com/protected
+```
+
+## Bearer Token Authentication
+
+Use `--bearer` to send a bearer token:
+
+```bash
+orb --bearer "eyJhbGciOiJIUzI1NiIs..." https://api.example.com/protected
+```
+
+This sends an `Authorization: Bearer <token>` header.
+
+### Common Use Cases
+
+```bash
+# OAuth2 access token
+orb --bearer "${ACCESS_TOKEN}" https://api.example.com/me
+
+# JWT token
+orb --bearer "$(cat token.txt)" https://api.example.com/protected
+
+# API key as bearer token
+orb --bearer "${API_KEY}" https://api.example.com/data
+```
+
+## Custom Authorization Headers
+
+For other authentication schemes, use the `-H` flag:
+
+```bash
+# API Key in header
+orb -H "X-API-Key: your-api-key" https://api.example.com
+
+# Digest auth (manual)
+orb -H "Authorization: Digest username=alice, ..." https://api.example.com
+
+# AWS Signature
+orb -H "Authorization: AWS4-HMAC-SHA256 ..." https://api.example.com
+```
+
+## Authentication with Client Certificates (mTLS)
+
+For mutual TLS authentication, use `--cert` and optionally `--key`:
+
+```bash
+orb --cert client.pem --key client-key.pem https://secure.example.com
+```
+
+See [TLS & SSL](/cli/tls-ssl/) for detailed certificate configuration.
+
+## Combining Authentication Methods
+
+<Aside type="caution">
+You cannot combine `-u` and `--bearer` - they're mutually exclusive since both set the `Authorization` header.
+</Aside>
+
+You can combine other auth methods:
+
+```bash
+# Bearer token + API key header
+orb --bearer "${TOKEN}" \
+  -H "X-API-Key: ${API_KEY}" \
+  https://api.example.com
+
+# Basic auth + client certificate
+orb -u alice:password \
+  --cert client.pem \
+  https://secure.example.com
+```
+
+## Authentication Examples
+
+### REST API with Bearer Token
+
+```bash
+# Get user profile
+orb --bearer "${TOKEN}" https://api.github.com/user
+
+# Create a resource
+orb --bearer "${TOKEN}" \
+  -X POST \
+  --json '{"name": "New Resource"}' \
+  https://api.example.com/resources
+```
+
+### Private Docker Registry
+
+```bash
+orb -u "${DOCKER_USER}:${DOCKER_PASS}" \
+  https://registry.example.com/v2/_catalog
+```
+
+### Basic Auth with JSON Response
+
+```bash
+orb -u admin:password \
+  -H "Accept: application/json" \
+  https://api.example.com/admin/status
+```

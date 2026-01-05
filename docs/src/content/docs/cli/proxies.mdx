@@ -1,0 +1,134 @@
+---
+title: Proxies
+description: HTTP and SOCKS5 proxy support
+sidebar:
+  order: 10
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orb supports routing requests through HTTP and SOCKS5 proxies.
+
+## HTTP Proxy
+
+Use `-x` or `--proxy` with an HTTP proxy URL:
+
+```bash
+orb -x http://proxy.example.com:8080 https://api.example.com
+```
+
+### With Authentication
+
+```bash
+orb -x http://user:password@proxy.example.com:8080 https://api.example.com
+```
+
+### HTTPS Proxy (CONNECT)
+
+For HTTPS requests through an HTTP proxy, orb uses the CONNECT method:
+
+```bash
+orb -x http://proxy.example.com:8080 https://secure.example.com
+```
+
+The proxy creates a tunnel, and TLS is established end-to-end with the target server.
+
+## SOCKS5 Proxy
+
+Use a `socks5://` URL:
+
+```bash
+orb -x socks5://proxy.example.com:1080 https://api.example.com
+```
+
+### SOCKS5 with Authentication
+
+```bash
+orb -x socks5://user:password@proxy.example.com:1080 https://api.example.com
+```
+
+<Aside type="note">
+SOCKS5 proxies tunnel all traffic, including the initial DNS resolution (by default).
+</Aside>
+
+## Proxy Types Comparison
+
+| Type | Use Case | DNS Resolution |
+|------|----------|----------------|
+| HTTP | Web traffic, corporate proxies | Proxy resolves |
+| SOCKS5 | Generic TCP, anonymity | Proxy resolves |
+
+## Common Proxy Scenarios
+
+### Corporate Proxy
+
+```bash
+orb -x http://corporate-proxy.internal:8080 \
+  https://external-api.example.com
+```
+
+### SSH Tunnel as SOCKS5
+
+If you have an SSH tunnel:
+
+```bash
+# In another terminal: ssh -D 1080 user@server
+orb -x socks5://localhost:1080 https://api.example.com
+```
+
+### Local Development Proxy
+
+```bash
+# Charles Proxy, Fiddler, mitmproxy, etc.
+orb -x http://localhost:8888 https://api.example.com
+
+# May need to trust proxy's CA for HTTPS inspection
+orb -x http://localhost:8888 \
+  --cacert ~/.mitmproxy/mitmproxy-ca-cert.pem \
+  https://api.example.com
+```
+
+## Proxy with Other Options
+
+### With Authentication
+
+```bash
+orb -x http://proxy:8080 \
+  -u api-user:api-password \
+  https://api.example.com/protected
+```
+
+### With Custom Headers
+
+```bash
+orb -x http://proxy:8080 \
+  -H "X-Forwarded-For: 192.168.1.1" \
+  https://api.example.com
+```
+
+### With Verbose Output
+
+```bash
+orb -v -x http://proxy:8080 https://api.example.com
+```
+
+Shows proxy connection details:
+```
+* Connecting via proxy http://proxy:8080
+* CONNECT api.example.com:443 HTTP/1.1
+* Proxy CONNECT response: 200
+* TLS handshake completed
+```
+
+## Environment Variables
+
+<Aside type="note">
+Orb currently doesn't read `HTTP_PROXY` or `HTTPS_PROXY` environment variables. Use the `-x` flag explicitly.
+</Aside>
+
+## Limitations
+
+- Only HTTP CONNECT and SOCKS5 proxies are supported
+- No SOCKS4 support
+- No automatic proxy detection
+- No proxy bypass/exclusion lists

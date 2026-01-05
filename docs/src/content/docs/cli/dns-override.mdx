@@ -1,0 +1,159 @@
+---
+title: DNS Override
+description: Route requests to different hosts using --connect-to
+sidebar:
+  order: 7
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `--connect-to` option allows you to override DNS resolution and route requests to a different host or port. This is useful for testing, debugging, and local development.
+
+## Basic Usage
+
+```bash
+orb --connect-to "example.com:443:localhost:8443" https://example.com
+```
+
+Format: `HOST1:PORT1:HOST2:PORT2`
+
+This routes requests for `example.com:443` to `localhost:8443`.
+
+## How It Works
+
+1. Orb resolves `HOST2` to get the actual IP address
+2. Connects to `HOST2:PORT2` instead of `HOST1:PORT1`
+3. Sends the request with the original `Host: HOST1` header
+4. TLS validation (if any) uses the original hostname
+
+The request URL and Host header remain unchanged - only the network connection is rerouted.
+
+## Wildcard Matching
+
+### Any Host
+
+Leave `HOST1` empty to match any hostname:
+
+```bash
+orb --connect-to ":443:localhost:8443" https://any-domain.com
+```
+
+### Any Port
+
+Leave `PORT1` empty to match any port:
+
+```bash
+orb --connect-to "example.com::localhost:8443" https://example.com
+orb --connect-to "example.com::localhost:8443" https://example.com:8080
+```
+
+### Both Wildcards
+
+```bash
+orb --connect-to "::localhost:8443" https://anything.com:any-port
+```
+
+## Multiple Rules
+
+Use `--connect-to` multiple times for multiple rules:
+
+```bash
+orb \
+  --connect-to "api.prod.example.com:443:localhost:3000" \
+  --connect-to "auth.prod.example.com:443:localhost:3001" \
+  https://api.prod.example.com
+```
+
+Rules are matched in order. First match wins.
+
+## Common Use Cases
+
+### Local Development
+
+Test production URLs against local services:
+
+```bash
+# Route production API to local server
+orb --connect-to "api.example.com:443:localhost:8080" \
+  https://api.example.com/users
+```
+
+### Testing with Different Servers
+
+```bash
+# Test staging server with production URL
+orb --connect-to "api.example.com:443:staging.example.com:443" \
+  https://api.example.com/health
+```
+
+### Docker Development
+
+```bash
+# Route to Docker container
+orb --connect-to "api.example.com:443:host.docker.internal:8080" \
+  https://api.example.com
+```
+
+### Load Balancer Bypass
+
+Test a specific backend server:
+
+```bash
+# Route directly to a specific server
+orb --connect-to "api.example.com:443:server-01.internal:443" \
+  https://api.example.com/health
+```
+
+### Local Mock Server
+
+Test with a mock server:
+
+```bash
+# Route to mock server
+orb --connect-to "api.example.com:443:127.0.0.1:9999" \
+  -k \
+  https://api.example.com/users
+```
+
+<Aside type="tip">
+Use `-k` (insecure) when routing HTTPS to a local server with a self-signed certificate.
+</Aside>
+
+## With Verbose Output
+
+See the override in action:
+
+```bash
+orb -v --connect-to "example.com:443:localhost:8443" https://example.com
+```
+
+Output:
+```
+* Connecting to localhost:8443 (overriden from example.com:443)
+* Resolving host: localhost
+*   Resolved localhost to 127.0.0.1 (0ms)
+...
+```
+
+## TLS Considerations
+
+When overriding HTTPS connections:
+
+1. **Certificate validation** uses the original hostname (HOST1)
+2. If the target server has a different certificate, use `-k` or provide the correct CA with `--cacert`
+
+```bash
+# Local server with production certificate
+orb --connect-to "api.example.com:443:localhost:8443" \
+  https://api.example.com
+
+# Local server with self-signed certificate
+orb --connect-to "api.example.com:443:localhost:8443" \
+  -k \
+  https://api.example.com
+
+# Local server with known CA
+orb --connect-to "api.example.com:443:localhost:8443" \
+  --cacert local-ca.pem \
+  https://api.example.com
+```

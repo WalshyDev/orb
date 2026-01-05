@@ -1,0 +1,70 @@
+[package]
+name = "orb-cli"
+version = "0.1.0"
+edition = "2024"
+authors = ["Daniel Walsh <orb@walshy.dev>"]
+description = "🟠 Your powerful HTTP client - A powerful cURL alternative with HTTP/1.1, HTTP/2, and HTTP/3"
+license = "MIT"
+repository = "https://github.com/WalshyDev/orb"
+homepage = "https://github.com/WalshyDev/orb"
+readme = "README.md"
+keywords = ["http", "client", "curl", "cli", "rest"]
+rust-version = "1.91"
+publish = false
+
+[[bin]]
+name = "orb"
+path = "src/main.rs"
+
+[dependencies]
+orb-client = { path = "../orb-client" }
+
+base64 = "0.22"
+clap = { version = "4.5.54", features = ["derive"] }
+futures-util = "0.3"
+indicatif = "0.18.3"
+tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "net", "io-util", "io-std", "time"] }
+url = "2.5.7"
+
+# Core HTTP types
+http = "1.2"
+bytes = "1.9"
+
+# TLS (for certificate parsing in CLI validation)
+rustls-pemfile = "2.2"
+
+# Compression
+async-compression = { version = "0.4", features = ["tokio", "gzip", "deflate", "brotli", "zstd"] }
+tokio-util = { version = "0.7.18", features = ["io"] }
+pin-project-lite = "0.2"
+
+# Cookies
+cookie = { version = "0.18", features = ["percent-encode"] }
+cookie_store = "0.22.0"
+
+# Multipart
+mime_guess = "2.0"
+uuid = { version = "1.19.0", features = ["v4"] }
+
+# TTY detection for WebSocket interactive mode
+atty = "0.2"
+
+# Interactive WebSocket mode
+rustyline = "17.0.2"
+
+[dev-dependencies]
+tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "io-util", "net", "process"] }
+assert_cmd = "2.0"
+predicates = "3.1"
+test-case = "3.3.1"
+insta = "1.46.0"
+regex = "1.12.2"
+rcgen = "0.14.6"  # For HTTP/3 test certificate generation
+tempfile = "3.15"  # For temporary cert files in tests
+orb-mockhttp = { path = "../orb-mockhttp" }
+
+# HTTP/3 test server dependencies
+h3 = "0.0.8"
+h3-quinn = "0.0.10"
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }

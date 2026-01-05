@@ -1,0 +1,214 @@
+---
+title: Getting Started
+description: Set up your first mock HTTP server for testing
+sidebar:
+  order: 2
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## Installation
+
+Add `orb-mockhttp` to your `Cargo.toml`:
+
+```toml
+[dev-dependencies]
+orb-mockhttp = "0.1"
+tokio = { version = "1", features = ["full"] }
+```
+
+<Aside type="note">
+orb-mockhttp is typically used as a dev-dependency since it's primarily for testing.
+</Aside>
+
+## Basic Setup
+
+<Steps>
+1. **Import the library**
+
+   ```rust
+   use orb_mockhttp::{TestServerBuilder, ResponseBuilder};
+   ```
+
+2. **Create a server**
+
+   ```rust
+   let server = TestServerBuilder::new().build();
+   ```
+
+3. **Define routes**
+
+   ```rust
+   server.on_request("/api/health")
+       .respond_with(200, "OK");
+   ```
+
+4. **Use the server URL in your tests**
+
+   ```rust
+   let url = server.url("/api/health");
+   // url is something like "http://127.0.0.1:12345/api/health"
+   ```
+</Steps>
+
+## Complete Example
+
+```rust
+use orb_mockhttp::TestServerBuilder;
+
+#[tokio::test]
+async fn test_health_endpoint() {
+    // Create a basic HTTP server
+    let server = TestServerBuilder::new().build();
+
+    // Set up a route
+    server.on_request("/health")
+        .respond_with(200, "healthy");
+
+    // Make a request using your HTTP client
+    let client = reqwest::Client::new();
+    let response = client.get(server.url("/health"))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.text().await.unwrap(), "healthy");
+}
+```
+
+## Server Types
+
+### HTTP (No TLS)
+
+For simple HTTP/1.1 testing:
+
+```rust
+let server = TestServerBuilder::new().build();
+// server.url() returns http://127.0.0.1:PORT/...
+```
+
+### HTTPS (With TLS)
+
+For HTTPS testing with auto-generated certificates:
+
+```rust
+let server = TestServerBuilder::new()
+    .with_tls()
+    .build();
+// server.url() returns https://127.0.0.1:PORT/...
+```
+
+<Aside type="tip">
+When using TLS, your HTTP client needs to trust the server's certificate. Use `server.cert_pem()` to get the certificate for configuring your client.
+</Aside>
+
+### Specific Protocols
+
+Limit to specific HTTP protocols:
+
+```rust
+use orb_mockhttp::HttpProtocol;
+
+// HTTP/2 only
+let server = TestServerBuilder::new()
+    .with_tls()
+    .with_protocols(&[HttpProtocol::Http2])
+    .build();
+
+// HTTP/3 only
+let server = TestServerBuilder::new()
+    .with_tls()
+    .with_protocols(&[HttpProtocol::Http3])
+    .build();
+
+// HTTP/1.1 and HTTP/2
+let server = TestServerBuilder::new()
+    .with_tls()
+    .with_protocols(&[HttpProtocol::Http1, HttpProtocol::Http2])
+    .build();
+```
+
+## Configuring Routes
+
+### Simple Response
+
+```rust
+server.on_request("/hello")
+    .respond_with(200, "Hello, World!");
+```
+
+### With Method Matching
+
+```rust
+server.on_request("/users")
+    .expect_method("POST")
+    .respond_with(201, r#"{"id": 1}"#);
+```
+
+### Dynamic Response
+
+```rust
+server.on_request_fn("/echo", |req| {
+    ResponseBuilder::new()
+        .status(200)
+        .text(format!("Received: {}", req.text_lossy()))
+        .build()
+});
+```
+
+## Getting the Server URL
+
+```rust
+let server = TestServerBuilder::new().build();
+
+// Full URL with path
+let url = server.url("/api/users");  // http://127.0.0.1:12345/api/users
+
+// Just the port
+let port = server.port();  // 12345
+
+// Full address
+let addr = server.address();  // "127.0.0.1:12345"
+```
+
+## TLS Certificate Access
+
+For HTTPS servers, get the certificate to configure your client:
+
+```rust
+let server = TestServerBuilder::new().with_tls().build();
+
+// PEM format (for most clients)
+let pem = server.cert_pem().unwrap();
+
+// DER format (raw bytes)
+let der = server.cert_der().unwrap();
+```
+
+## Server Lifecycle
+
+The server starts automatically when built and stops when dropped:
+
+```rust
+{
+    let server = TestServerBuilder::new().build();
+    // Server is running here
+
+    server.on_request("/test").respond_with(200, "OK");
+    // ... run your tests ...
+
+} // Server automatically shuts down when `server` goes out of scope
+```
+
+For explicit shutdown:
+
+```rust
+server.shutdown();
+```
+
+## Next Steps
+
+- [Server Configuration](/mockhttp/server/) - Advanced server options
+- [Routes & Matching](/mockhttp/routes/) - Complex route patterns
+- [Building Responses](/mockhttp/responses/) - JSON, delays, and streaming

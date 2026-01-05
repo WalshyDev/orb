@@ -1,0 +1,84 @@
+---
+title: HTTP Protocols
+description: HTTP/1.1, HTTP/2, and HTTP/3 support
+sidebar:
+  order: 9
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orb supports HTTP/1.1, HTTP/2, and HTTP/3 (QUIC). By default, it automatically negotiates the best available protocol.
+
+## Protocol Versions
+
+### HTTP/1.1
+
+The classic HTTP protocol. Works over plain TCP or TLS.
+
+```bash
+orb --http1.1 https://example.com
+```
+
+### HTTP/2
+
+Multiplexed connections over a single TCP connection. Requires TLS (HTTPS).
+
+```bash
+orb --http2 https://example.com
+```
+
+### HTTP/3
+
+The newest protocol, using QUIC instead of TCP. Requires TLS (HTTPS) and server support.
+
+```bash
+orb --http3 https://example.com
+```
+
+<Aside type="note">
+HTTP/3 requires the server to support QUIC. Many servers don't support it yet. If the server doesn't support HTTP/3, orb will fail with an error rather than falling back.
+</Aside>
+
+## Automatic Protocol Negotiation
+
+Without forcing a specific version, orb negotiates the best protocol:
+
+```bash
+# HTTPS: Negotiates HTTP/2 or HTTP/1.1 via ALPN
+orb https://example.com
+
+# HTTP: Uses HTTP/1.1 (no negotiation)
+orb http://example.com
+```
+
+The protocol is negotiated during TLS handshake using ALPN (Application-Layer Protocol Negotiation).
+
+## Checking the Protocol Used
+
+Use `-v` (verbose) to see which protocol was used:
+
+```bash
+orb -v https://example.com 2>&1 | grep -i "http/"
+```
+
+Output:
+```
+< HTTP/2 200 OK
+```
+
+Or with write-out:
+```bash
+orb -w https://example.com
+```
+
+## Protocol Requirements
+
+| Protocol | Encryption | Transport |
+|----------|------------|-----------|
+| HTTP/1.1 | Optional | TCP |
+| HTTP/2 | Required (HTTPS) | TCP |
+| HTTP/3 | Required (HTTPS) | QUIC (UDP) |
+
+<Aside type="caution">
+Forcing HTTP/2 or HTTP/3 on a plain HTTP URL will fail. Always use HTTPS with these protocols.
+</Aside>

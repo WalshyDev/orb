@@ -1,0 +1,48 @@
+[package]
+name = "orb-client"
+version = "0.1.0"
+edition = "2024"
+authors = ["Daniel Walsh <orb@walshy.dev>"]
+description = "HTTP client library for Orb - supports HTTP/1.1, HTTP/2, and HTTP/3"
+license = "MIT"
+repository = "https://github.com/WalshyDev/orb"
+rust-version = "1.91"
+publish = false
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.49.0", features = ["net", "io-util", "time"] }
+futures-util = "0.3"
+pin-project = "1.1"
+
+# URL parsing
+url = "2.5.7"
+
+# Core HTTP types
+http = "1.2"
+http-body = "1.0"
+http-body-util = "0.1"
+bytes = "1.9"
+
+# JSON
+serde_json = { version = "1.0.148" }
+
+# HTTP/1.1 + HTTP/2
+hyper = { version = "1.6", features = ["client", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
+hyper-rustls = { version = "0.27", features = ["http1", "http2", "native-tokio", "tls12", "ring"] }
+tower-service = "0.3"
+
+# HTTP/3 (QUIC)
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
+h3 = "0.0.8"
+h3-quinn = "0.0.10"
+
+# TLS
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+tokio-rustls = "0.26"
+webpki-roots = "1.0.5"
+x509-parser = "0.18.0"
+
+# WebSocket
+tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["rustls-tls-native-roots"] }

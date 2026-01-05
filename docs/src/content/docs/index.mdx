@@ -1,0 +1,95 @@
+---
+title: Orb
+description: Modern HTTP tools written in Rust
+template: splash
+hero:
+  tagline: Modern and powerful HTTP tools built with Rust. Supports HTTP/1.1, HTTP/2, HTTP/3, and WebSockets.
+  image:
+    file: ../../assets/orb-logo.svg
+  actions:
+    - text: Get Started
+      link: /getting-started/installation/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/WalshyDev/orb
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Why Orb tools?
+
+<CardGrid stagger>
+  <Card title="Modern Protocols" icon="rocket">
+    Full support for HTTP/1.1, HTTP/2, and HTTP/3 (QUIC). Automatically negotiates the best protocol or force a specific version.
+  </Card>
+  <Card title="WebSocket Support" icon="puzzle">
+    Connect to WebSocket servers with `ws://` and `wss://` URLs. Interactive mode for sending messages or script-friendly single-message mode.
+  </Card>
+  <Card title="cURL Compatible" icon="seti:shell">
+    Familiar command-line interface inspired by cURL. Easy migration with similar options like `-H`, `-d`, `-X`, `-u`, and more.
+  </Card>
+  <Card title="Built with Rust" icon="seti:rust">
+    Fast, memory-safe, and cross-platform. Single binary with no runtime dependencies.
+  </Card>
+</CardGrid>
+
+## orb-cli
+
+```bash
+# Simple GET request
+orb https://api.example.com/users
+
+# POST with JSON data
+orb https://api.example.com/users -X POST --json '{"name": "Alice"}'
+
+# Force HTTP/3
+orb https://example.com --http3
+
+# WebSocket connection
+orb wss://echo.websocket.org --ws-message "Hello!"
+```
+
+### Features
+
+| Feature | Orb | cURL |
+|---------|-----|------|
+| HTTP/1.1 | ✓ | ✓ |
+| HTTP/2 | ✓ | ✓ |
+| HTTP/3 (QUIC) | ✓ | ✓ (experimental) |
+| WebSocket | ✓ | ✗ |
+| JSON shorthand | `--json` | `-H + -d` |
+| Progress bar | ✓ | ✓ |
+| Compression | zstd, br, gzip, deflate | gzip, deflate, br |
+| Cookie jar | ✓ | ✓ |
+| Multipart forms | ✓ | ✓ |
+| Proxy support | HTTP, SOCKS5 | HTTP, SOCKS4/5 |
+| mTLS | ✓ | ✓ |
+
+## orb-mockhttp
+
+A powerful mock HTTP server library for testing Rust applications. Supports HTTP/1.1, HTTP/2, HTTP/3, and WebSockets.
+
+```rust
+use orb_mockhttp::TestServerBuilder;
+
+let server = TestServerBuilder::new().with_tls().build();
+
+server.on_request("/api/users")
+    .expect_method("GET")
+    .respond_with(200, r#"{"users": []}"#);
+
+// Use server.url("/api/users") in your tests
+```
+
+<CardGrid>
+  <Card title="CLI Documentation" icon="document">
+    Learn how to use all of orb's features.
+    [Read the CLI docs →](/cli/overview/)
+  </Card>
+  <Card title="orb-mockhttp" icon="setting">
+    Set up mock servers for testing.
+    [Read the mockhttp docs →](/mockhttp/overview/)
+  </Card>
+</CardGrid>

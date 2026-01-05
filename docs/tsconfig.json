@@ -1,0 +1,6 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "references": [
+    { "path": "tsconfig.worker.json" }
+  ]
+}

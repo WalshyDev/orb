@@ -1,0 +1,75 @@
+---
+title: Installation
+description: How to install orb on your system
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Pre-built Binaries
+
+Download the latest release for your platform from the [GitHub Releases](https://github.com/WalshyDev/orb/releases) page.
+
+<Tabs>
+  <TabItem label="macOS">
+    ```bash
+    # Download (works on both Apple Silicon and Intel)
+    curl -L https://orb-tools.com/downloads/orb-macos -o orb
+    chmod +x orb
+    sudo mv orb /usr/local/bin/
+    ```
+  </TabItem>
+  <TabItem label="Linux">
+    ```bash
+    curl -L https://orb-tools.com/downloads/orb-linux -o orb
+    chmod +x orb
+    sudo mv orb /usr/local/bin/
+    ```
+  </TabItem>
+  <TabItem label="Windows">
+    ```powershell
+    # Download using PowerShell
+    Invoke-WebRequest -Uri "https://orb-tools.com/downloads/orb-windows" -OutFile "orb.exe"
+    # Move orb.exe to a directory in your PATH
+    ```
+  </TabItem>
+</Tabs>
+
+## Build from Source
+
+### Prerequisites
+
+- Rust 1.90+ (nightly recommended)
+- Git
+
+### Clone and Build
+
+```bash
+git clone https://github.com/WalshyDev/orb.git
+cd orb
+make release
+```
+
+The binary will be at `target/release/orb`.
+
+### Install Globally
+
+```bash
+# After building
+sudo cp target/release/orb /usr/local/bin/
+```
+
+## Verify Installation
+
+```bash
+orb --version
+```
+
+You should see output like:
+
+```
+orb 0.1.0
+```
+
+## What's Next?
+
+Now that you have orb installed, check out the [Quick Start guide](/getting-started/quick-start/) to make your first request!

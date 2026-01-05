@@ -1,0 +1,185 @@
+---
+title: HTTP Requests
+description: Making HTTP requests with different methods, headers, and body data
+sidebar:
+  order: 3
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## HTTP Methods
+
+By default, orb uses GET. Use `-X` or `--request` to specify a different method:
+
+```bash
+orb -X POST https://api.example.com/users
+orb -X PUT https://api.example.com/users/1
+orb -X DELETE https://api.example.com/users/1
+orb -X PATCH https://api.example.com/users/1
+```
+
+<Aside type="tip">
+The `-X` flag accepts any valid HTTP method, including custom methods.
+</Aside>
+
+## Request Headers
+
+Add custom headers with `-H` or `--header`:
+
+```bash
+orb https://api.example.com \
+  -H "Authorization: Bearer token123" \
+  -H "Accept: application/json" \
+  -H "X-Custom-Header: value"
+```
+
+### Default Headers
+
+Orb automatically sets these headers:
+- `Host`: Derived from the URL
+- `User-Agent`: `orb/<version>`
+- `Accept`: `*/*`
+
+Custom headers override defaults with the same name.
+
+## Request Body
+
+### URL-Encoded Data (`-d`)
+
+Use `-d` or `--data` to send URL-encoded form data:
+
+```bash
+orb https://api.example.com/login \
+  -X POST \
+  -d "username=alice&password=secret"
+```
+
+This automatically sets `Content-Type: application/x-www-form-urlencoded`.
+
+### Send File Contents
+
+Prefix with `@` to read data from a file:
+
+```bash
+orb https://api.example.com/data \
+  -X POST \
+  -d @payload.txt
+```
+
+### JSON Data (`--json`)
+
+The `--json` flag is a convenient way to send JSON:
+
+```bash
+orb https://api.example.com/users \
+  -X POST \
+  --json '{"name": "Alice", "email": "alice@example.com"}'
+```
+
+This automatically:
+- Sets `Content-Type: application/json`
+- Sends the data as the request body
+
+<Aside type="note">
+`--json` conflicts with `-d` and `-F`. Use only one.
+</Aside>
+
+### Multipart Form Data (`-F`)
+
+Use `-F` or `--form` for multipart form uploads:
+
+```bash
+# Upload a file
+orb https://api.example.com/upload \
+  -X POST \
+  -F "file=@/path/to/image.png"
+
+# Multiple fields
+orb https://api.example.com/upload \
+  -X POST \
+  -F "file=@/path/to/image.png" \
+  -F "title=My Image" \
+  -F "description=A beautiful sunset"
+```
+
+Orb automatically:
+- Detects the MIME type from the file extension
+- Generates a multipart boundary
+- Sets the appropriate `Content-Type` header
+
+## Request Examples
+
+<Tabs>
+  <TabItem label="GET">
+    ```bash
+    # Simple GET
+    orb https://api.example.com/users
+
+    # With query parameters (part of URL)
+    orb "https://api.example.com/users?page=2&limit=10"
+
+    # With custom headers
+    orb https://api.example.com/users \
+      -H "Accept: application/json" \
+      -H "Authorization: Bearer token"
+    ```
+  </TabItem>
+  <TabItem label="POST">
+    ```bash
+    # JSON body
+    orb https://api.example.com/users \
+      -X POST \
+      --json '{"name": "Alice"}'
+
+    # Form data
+    orb https://api.example.com/login \
+      -X POST \
+      -d "username=alice&password=secret"
+
+    # File upload
+    orb https://api.example.com/upload \
+      -X POST \
+      -F "file=@document.pdf"
+    ```
+  </TabItem>
+  <TabItem label="PUT/PATCH">
+    ```bash
+    # Full update
+    orb https://api.example.com/users/1 \
+      -X PUT \
+      --json '{"name": "Alice", "email": "new@example.com"}'
+
+    # Partial update
+    orb https://api.example.com/users/1 \
+      -X PATCH \
+      --json '{"email": "updated@example.com"}'
+    ```
+  </TabItem>
+  <TabItem label="DELETE">
+    ```bash
+    # Simple delete
+    orb -X DELETE https://api.example.com/users/1
+
+    # With auth
+    orb -X DELETE https://api.example.com/users/1 \
+      -H "Authorization: Bearer token"
+    ```
+  </TabItem>
+</Tabs>
+
+## Content-Type Behavior
+
+| Flag | Sets Content-Type |
+|------|-------------------|
+| `-d` | `application/x-www-form-urlencoded` |
+| `--json` | `application/json` |
+| `-F` | `multipart/form-data; boundary=...` |
+
+You can override the automatic Content-Type with a custom header:
+
+```bash
+orb https://api.example.com \
+  -X POST \
+  -d '{"custom": "data"}' \
+  -H "Content-Type: application/json"
+```

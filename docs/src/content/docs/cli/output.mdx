@@ -1,0 +1,219 @@
+---
+title: Output & Progress
+description: Response output, headers, progress bars, and verbose mode
+sidebar:
+  order: 8
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orb provides several options for controlling how responses are displayed.
+
+## Response Body
+
+By default, the response body is printed to stdout:
+
+```bash
+orb https://api.example.com/users
+```
+
+### Save to File
+
+Use `-o` or `--output` to save the response to a file:
+
+```bash
+orb https://example.com/file.zip -o downloaded.zip
+```
+
+## Response Headers
+
+### Include Headers (`-i`)
+
+Use `-i` or `--include` to print headers before the body:
+
+```bash
+orb -i https://example.com
+```
+
+Output:
+```
+HTTP/2 200 OK
+content-type: text/html
+date: Mon, 01 Jan 2024 12:00:00 GMT
+content-length: 1234
+
+<!DOCTYPE html>
+...
+```
+
+### Headers Only (`-I`)
+
+Use `-I` or `--head` to show only headers (no body):
+
+```bash
+orb -I https://example.com
+```
+
+This is equivalent to a HEAD request, showing the response line and headers.
+
+## Verbose Mode (`-v`)
+
+Use `-v` or `--verbose` for detailed request/response information:
+
+```bash
+orb -v https://example.com
+```
+
+Verbose output includes:
+- DNS resolution
+- TLS handshake details
+- Request headers (prefixed with `>`)
+- Response headers (prefixed with `<`)
+
+```
+* Resolving host: example.com
+*   Resolved example.com to 93.184.216.34 (12ms)
+* TLS handshake completed
+*   TLS version: TLSv1.3
+*   Cipher: TLS_AES_256_GCM_SHA384
+*   ALPN: h2
+*   Server certificate:
+*     Subject: CN=example.com
+*     Issuer: CN=DigiCert Global Root CA
+> GET / HTTP/2
+> Host: example.com
+> User-Agent: orb/0.1.0
+> Accept: */*
+>
+< HTTP/2 200 OK
+< content-type: text/html
+< date: Mon, 01 Jan 2024 12:00:00 GMT
+<
+```
+
+<Aside type="note">
+Verbose output goes to stderr, so it doesn't interfere with piping the response body.
+</Aside>
+
+## Write-Out Statistics (`-w`)
+
+Use `-w` or `--write-out` to display timing and size statistics:
+
+```bash
+orb -w https://example.com
+```
+
+Output (to stderr):
+```
+http_code: 200
+size_download: 1234
+time_starttransfer: 0.234
+time_total: 0.456
+```
+
+| Metric | Description |
+|--------|-------------|
+| `http_code` | HTTP status code |
+| `size_download` | Response body size in bytes |
+| `time_starttransfer` | Time to first byte (TTFB) in seconds |
+| `time_total` | Total request time in seconds |
+
+## Progress Bar
+
+### Manual Progress (`-#`)
+
+Use `-#` or `--progress` to show a download progress bar:
+
+```bash
+orb -# https://example.com/large-file.iso -o large-file.iso
+```
+
+Output:
+```
+[00:01:23] ████████████░░░░░░░░░ 45.2% • 450 MiB/1 GiB • 50 MiB/s • ETA 00:01:40
+```
+
+### Automatic Progress
+
+For downloads over 100 MiB, progress is shown automatically:
+
+```bash
+orb https://example.com/huge-file.iso -o huge.iso
+# Progress bar appears automatically
+```
+
+Also, if the first byte takes more than 1 second, progress appears.
+
+## Silent Mode (`-s`)
+
+Use `-s` or `--silent` to suppress all output except the response body:
+
+```bash
+orb -s https://example.com
+```
+
+Silent mode suppresses:
+- Verbose output (`-v`)
+- Statistics (`-w`)
+- Progress bar (`-#`)
+- Error messages
+
+<Aside type="note">
+Exit codes are still set correctly in silent mode. Use `$?` to check for errors.
+</Aside>
+
+## Combining Options
+
+```bash
+# Verbose with headers and stats
+orb -v -i -w https://example.com
+
+# Download with progress, save to file
+orb -# https://example.com/file.zip -o file.zip
+
+# Headers only, verbose
+orb -v -I https://example.com
+
+# Silent mode for scripting
+if orb -s https://api.example.com/health; then
+  echo "API is healthy"
+fi
+```
+
+## Output Destinations
+
+| Content | Destination | Flag |
+|---------|-------------|------|
+| Response body | stdout | (default) |
+| Response body | file | `-o` |
+| Response headers | stdout | `-i` |
+| Verbose info | stderr | `-v` |
+| Statistics | stderr | `-w` |
+| Progress bar | stderr | `-#` |
+| Errors | stderr | (always) |
+
+## Examples
+
+### API Response with Timing
+
+```bash
+orb -w https://api.example.com/users | jq .
+```
+
+### Debug Request Issues
+
+```bash
+orb -v https://api.example.com 2>&1 | less
+```
+
+### Download with Full Details
+
+```bash
+orb -v -# -w https://example.com/file.zip -o file.zip
+```
+
+### Pipe Response, Keep Stats
+
+```bash
+orb -w https://api.example.com/data 2>stats.txt | process-data
+```

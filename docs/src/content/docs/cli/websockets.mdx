@@ -1,0 +1,178 @@
+---
+title: WebSockets
+description: WebSocket connections and interactive mode
+sidebar:
+  order: 13
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orb supports WebSocket connections with both interactive and script-friendly modes.
+
+## Basic WebSocket Connection
+
+Connect using `ws://` (unencrypted) or `wss://` (TLS) URLs:
+
+```bash
+# Secure WebSocket
+orb wss://echo.websocket.org
+
+# Unencrypted WebSocket
+orb ws://localhost:8080/ws
+```
+
+## Sending Messages
+
+### Single Message Mode
+
+Use `--ws-message` to send a message and exit:
+
+```bash
+orb wss://echo.websocket.org --ws-message "Hello, WebSocket!"
+```
+
+This:
+1. Connects to the WebSocket server
+2. Sends the message
+3. Receives the response
+4. Disconnects
+
+### Interactive Mode
+
+Without `--ws-message`, orb enters interactive mode (when TTY is available):
+
+```bash
+orb wss://echo.websocket.org
+```
+
+In interactive mode:
+- Type a message and press Enter to send
+- Received messages are printed to stdout
+- Use Ctrl+C or Ctrl+D to disconnect
+
+<Aside type="tip">
+Interactive mode uses readline for line editing, history, and more comfortable typing.
+</Aside>
+
+## Verbose Output
+
+Use `-v` to see connection details:
+
+```bash
+orb -v wss://echo.websocket.org --ws-message "test"
+```
+
+Output:
+```
+* Connecting to wss://echo.websocket.org:443
+*   WebSocket connected to echo.websocket.org:443 (234ms)
+> Text message (5 bytes)
+< Text message (5 bytes)
+* WebSocket closed: 1000 Normal Closure
+```
+
+## WebSocket Options
+
+### Supported Options
+
+| Option | Description |
+|--------|-------------|
+| `-H, --header` | Custom headers for handshake |
+| `-A, --user-agent` | Custom User-Agent |
+| `--cert, --key` | Client certificate (mTLS) |
+| `--cacert` | CA certificate |
+| `-k, --insecure` | Skip certificate verification |
+| `--connect-to` | DNS override |
+| `--connect-timeout` | Connection timeout |
+| `-m, --max-time` | Maximum total time |
+| `-v, --verbose` | Verbose output |
+| `-s, --silent` | Suppress output |
+
+### Example with Headers
+
+```bash
+orb wss://api.example.com/ws \
+  -H "Authorization: Bearer token123" \
+  -H "X-Custom-Header: value" \
+  --ws-message '{"type": "subscribe", "channel": "updates"}'
+```
+
+### Example with mTLS
+
+```bash
+orb wss://secure.example.com/ws \
+  --cert client.pem \
+  --key client-key.pem \
+  --ws-message "Hello"
+```
+
+## Non-TTY Mode
+
+When stdin is not a TTY (e.g., in a script), orb waits for messages without prompting:
+
+```bash
+# In a script - just receives messages
+echo "Hello" | orb wss://echo.websocket.org
+
+# With timeout
+orb -m 5 wss://stream.example.com  # Disconnect after 5 seconds
+```
+
+## Examples
+
+### Echo Server Test
+
+```bash
+orb wss://echo.websocket.org --ws-message "Hello, World!"
+```
+
+Expected output:
+```
+Hello, World!
+```
+
+### Streaming Data
+
+```bash
+# Receive real-time updates for 10 seconds
+orb -m 10 wss://stream.example.com/prices
+```
+
+### Authenticated WebSocket
+
+```bash
+orb wss://api.example.com/ws \
+  --bearer "your-token" \
+  --ws-message '{"action": "subscribe", "topic": "updates"}'
+```
+
+### Chat Application
+
+```bash
+# Interactive chat
+orb wss://chat.example.com/room/general
+```
+
+Type messages and press Enter:
+```
+Hello everyone!
+< {"user": "bob", "message": "Hi there!"}
+< {"user": "alice", "message": "Welcome!"}
+Thanks!
+< {"user": "bob", "message": "How are you?"}
+^C
+* WebSocket closed: 1000 Normal Closure
+```
+
+## Unsupported Options
+
+These options don't apply to WebSocket connections:
+
+- `-X, --request` - WebSocket uses GET for handshake
+- `-d, --data`, `--json`, `-F` - Use `--ws-message` instead
+- `-o, --output` - No file output for WebSocket
+- `-i, --include`, `-I, --head` - No HTTP response headers
+- `-L, --location` - No redirect following
+- `--compressed` - No HTTP compression
+- `--http1.1`, `--http2`, `--http3` - Not applicable
+- `-w, --write-out` - No stats for WebSocket

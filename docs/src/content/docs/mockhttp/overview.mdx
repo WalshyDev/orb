@@ -1,0 +1,120 @@
+---
+title: Overview
+description: A powerful mock HTTP server library for Rust testing
+sidebar:
+  order: 1
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+**orb-mockhttp** is a flexible mock HTTP server library designed for testing Rust applications.
+It supports HTTP/1.1, HTTP/2, HTTP/3 (QUIC), and WebSockets, all in a simple, fluent API.
+
+## Why orb-mockhttp?
+
+<CardGrid stagger>
+  <Card title="Multi-Protocol" icon="rocket">
+    Full support for HTTP/1.1, HTTP/2, HTTP/3, and WebSockets. Test all protocols with the same API.
+  </Card>
+  <Card title="Auto-Generated TLS" icon="seti:lock">
+    Automatic self-signed certificate generation for HTTPS testing on a per-server basis.
+    No manual certificate setup and easy testing of both secure and insecure connections.
+  </Card>
+  <Card title="Fluent API" icon="pencil">
+    Intuitive builder pattern for configuring servers, routes, and responses.
+  </Card>
+  <Card title="Request Assertions" icon="approve-check">
+    Built-in methods to verify requests were received as expected.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```rust
+use orb_mockhttp::TestServerBuilder;
+
+#[tokio::test]
+async fn test_api_endpoint() {
+    // Create a mock server
+    let server = TestServerBuilder::new().build();
+
+    // Set up a route
+    server.on_request("/api/users")
+        .expect_method("GET")
+        .respond_with(200, r#"{"users": ["Alice", "Bob"]}"#);
+
+    // Make request to server.url("/api/users")
+    let response = your_http_client::get(&server.url("/api/users")).await;
+
+    assert_eq!(response.status(), 200);
+    assert!(response.text().contains("Alice"));
+}
+```
+
+## Key Features
+
+### Protocol Support
+
+| Protocol | TLS Required | Transport |
+|----------|--------------|-----------|
+| HTTP/1.1 | Optional | TCP |
+| HTTP/2 | Yes | TCP |
+| HTTP/3 | Yes | QUIC (UDP) |
+| WebSocket | Optional | TCP |
+
+### Route Matching
+
+Match requests by:
+- Path (exact match)
+- HTTP method
+- Headers
+- Request body
+
+### Response Building
+
+Build responses with:
+- Status codes
+- Custom headers
+- JSON, HTML, or plain text bodies
+- Delays and streaming
+
+### Request Assertions
+
+Verify your application:
+- Made the expected number of requests
+- Sent correct headers
+- Sent correct body data
+
+## When to Use orb-mockhttp
+
+- **Integration tests** - Test HTTP client code without real servers
+- **API contract testing** - Verify your client handles various responses
+- **Error handling tests** - Simulate timeouts, errors, and edge cases
+- **Protocol testing** - Test HTTP/2 and HTTP/3 specific behavior
+
+## Comparison with Other Libraries
+
+| Feature | orb-mockhttp | wiremock | mockito | httpmock |
+|---------|--------------|----------|---------|----------|
+| HTTP/1.1 | ✓ | ✓ | ✓ | ✓ |
+| HTTP/2 | ✓ | ✗ | ✗ | ✗ |
+| HTTP/3 | ✓ | ✗ | ✗ | ✗ |
+| WebSocket | ✓ | ✗ | ✗ | ✗ |
+| Auto TLS | ✓ | ✗ | ✗ | ✗ |
+| Async | ✓ | ✓ | ✗ | ✓ |
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dev-dependencies]
+orb-mockhttp = "0.1"
+tokio = { version = "1", features = ["full"] }
+```
+
+## Next Steps
+
+- [Getting Started](/mockhttp/getting-started/) - Set up your first mock server
+- [Routes & Matching](/mockhttp/routes/) - Configure request matching
+- [Building Responses](/mockhttp/responses/) - Create custom responses

@@ -1,0 +1,262 @@
+---
+title: Server Configuration
+description: TestServerBuilder and TestServer API reference
+sidebar:
+    order: 8
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## TestServerBuilder
+
+`TestServerBuilder` creates configured mock HTTP servers.
+
+### Basic Server
+
+```rust
+use orb_mockhttp::TestServerBuilder;
+
+let server = TestServerBuilder::new().build();
+```
+
+This creates an HTTP/1.1 server without TLS on a random available port.
+
+### With TLS
+
+```rust
+let server = TestServerBuilder::new()
+    .with_tls()
+    .build();
+```
+
+Enables TLS with auto-generated self-signed certificates. This also enables HTTP/1.1, HTTP/2, and HTTP/3 on the same port.
+
+### Specific Protocols
+
+```rust
+use orb_mockhttp::HttpProtocol;
+
+let server = TestServerBuilder::new()
+    .with_tls()
+    .with_protocols(&[HttpProtocol::Http2])
+    .build();
+```
+
+Available protocols:
+- `HttpProtocol::Http1` - HTTP/1.1
+- `HttpProtocol::Http2` - HTTP/2
+- `HttpProtocol::Http3` - HTTP/3 (QUIC)
+
+<Aside type="note">
+Selecting HTTP/2 or HTTP/3 automatically enables TLS, since these protocols require it.
+</Aside>
+
+### Custom Certificates
+
+```rust
+use std::path::PathBuf;
+
+let server = TestServerBuilder::new()
+    .with_certs(
+        PathBuf::from("path/to/cert.pem"),
+        PathBuf::from("path/to/key.pem")
+    )
+    .build();
+```
+
+Or with a pre-configured TLS config:
+
+```rust
+use orb_mockhttp::TlsConfig;
+
+let tls = TlsConfig::from_files(
+    PathBuf::from("cert.pem"),
+    PathBuf::from("key.pem")
+).unwrap();
+
+let server = TestServerBuilder::new()
+    .with_tls_config(tls)
+    .build();
+```
+
+## TestServer
+
+Once built, `TestServer` provides methods for route registration and server information.
+
+### Server Information
+
+```rust
+// Port number
+let port: u16 = server.port();
+
+// Whether TLS is enabled
+let is_tls: bool = server.is_tls();
+
+// Check protocol support
+let supports_h2: bool = server.supports_protocol(HttpProtocol::Http2);
+
+// All supported protocols
+let protocols: &HashSet<HttpProtocol> = server.protocols();
+
+// Full address
+let addr: String = server.address();  // "127.0.0.1:12345"
+```
+
+### Getting URLs
+
+```rust
+// Full URL for a path
+let url = server.url("/api/users");
+// Returns: "http://127.0.0.1:12345/api/users" or
+//          "https://127.0.0.1:12345/api/users" for TLS
+```
+
+<Aside type="tip">
+The same URL works for all enabled protocols. HTTP/1.1 and HTTP/2 use TCP, while HTTP/3 uses QUIC on the same port number.
+</Aside>
+
+### Certificate Access
+
+For TLS servers:
+
+```rust
+// PEM-encoded certificate string
+let pem: Option<String> = server.cert_pem();
+
+// DER-encoded certificate bytes
+let der: Option<&[u8]> = server.cert_der();
+```
+
+Use these to configure your HTTP client to trust the server's certificate.
+
+## Route Registration
+
+### Static Routes
+
+```rust
+server.on_request("/path")
+    .expect_method("GET")
+    .respond_with(200, "response body");
+```
+
+Returns a `RouteBuilder` for chaining configuration.
+
+### Dynamic Routes
+
+```rust
+use orb_mockhttp::ResponseBuilder;
+
+server.on_request_fn("/dynamic", |req| {
+    ResponseBuilder::new()
+        .status(200)
+        .text(format!("You requested: {}", req.path()))
+        .build()
+});
+```
+
+The closure receives a `Request` and must return a `Response`.
+
+### Clearing Routes
+
+```rust
+server.clear_routes();
+```
+
+Removes all registered routes. Useful for resetting between test cases.
+
+## Request Assertions
+
+### Assert Request Count
+
+```rust
+// Exactly one request was made
+server.assert_one_request();
+
+// Exactly N requests were made
+server.assert_requests(3);
+```
+
+### Get Raw Requests
+
+```rust
+// Get the first request (if any)
+let raw: Option<String> = server.get_raw_request();
+
+// Get all requests
+let all: Vec<String> = server.get_raw_requests();
+```
+
+Raw requests include the full HTTP request line and headers.
+
+## Server Lifecycle
+
+### Automatic Shutdown
+
+The server shuts down automatically when dropped:
+
+```rust
+{
+    let server = TestServerBuilder::new().build();
+    // Server running...
+} // Server shuts down here
+```
+
+### Explicit Shutdown
+
+```rust
+server.shutdown();
+```
+
+After shutdown, the server stops accepting connections.
+
+## Complete Example
+
+```rust
+use orb_mockhttp::{TestServerBuilder, HttpProtocol, ResponseBuilder};
+
+#[tokio::test]
+async fn comprehensive_test() {
+    // Create HTTPS server with HTTP/2
+    let server = TestServerBuilder::new()
+        .with_tls()
+        .with_protocols(&[HttpProtocol::Http1, HttpProtocol::Http2])
+        .build();
+
+    // Register routes
+    server.on_request("/api/users")
+        .expect_method("GET")
+        .respond_with(200, r#"{"users": []}"#);
+
+    server.on_request("/api/users")
+        .expect_method("POST")
+        .expect_header("Content-Type", "application/json")
+        .respond_with(201, r#"{"id": 1}"#);
+
+    server.on_request_fn("/echo", |req| {
+        ResponseBuilder::new()
+            .status(200)
+            .json(&serde_json::json!({
+                "method": req.method().as_str(),
+                "path": req.path(),
+            }))
+            .build()
+    });
+
+    // Get server info
+    println!("Server running on port {}", server.port());
+    println!("TLS enabled: {}", server.is_tls());
+    println!("URL: {}", server.url("/api/users"));
+
+    // Configure client with server certificate
+    let cert_pem = server.cert_pem().unwrap();
+    // ... configure your HTTP client with cert_pem ...
+
+    // Run tests...
+
+    // Verify requests
+    server.assert_requests(2);
+
+    // Explicit shutdown (optional - also happens on drop)
+    server.shutdown();
+}
+```

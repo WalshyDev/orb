@@ -1,0 +1,302 @@
+---
+title: Building Responses
+description: Create custom responses with ResponseBuilder
+sidebar:
+    order: 6
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `ResponseBuilder` provides a fluent API for constructing HTTP responses.
+
+## Basic Response
+
+```rust
+use orb_mockhttp::ResponseBuilder;
+
+let response = ResponseBuilder::new()
+    .status(200)
+    .text("Hello, World!")
+    .build();
+```
+
+## Status Codes
+
+```rust
+ResponseBuilder::new()
+    .status(201)  // Created
+    .build();
+
+ResponseBuilder::new()
+    .status(404)  // Not Found
+    .build();
+
+ResponseBuilder::new()
+    .status(500)  // Internal Server Error
+    .build();
+```
+
+Default status is 200 OK.
+
+## Response Body
+
+### Plain Text
+
+```rust
+ResponseBuilder::new()
+    .text("Hello, World!")  // Sets Content-Type: text/plain; charset=utf-8
+    .build();
+```
+
+### JSON
+
+```rust
+use serde_json::json;
+
+ResponseBuilder::new()
+    .json(&json!({
+        "id": 1,
+        "name": "Alice"
+    }))  // Sets Content-Type: application/json
+    .build();
+```
+
+Works with any `serde::Serialize` type:
+
+```rust
+#[derive(serde::Serialize)]
+struct User {
+    id: u32,
+    name: String,
+}
+
+let user = User { id: 1, name: "Alice".to_string() };
+
+ResponseBuilder::new()
+    .json(&user)
+    .build();
+```
+
+### HTML
+
+```rust
+ResponseBuilder::new()
+    .html("<h1>Hello</h1>")  // Sets Content-Type: text/html; charset=utf-8
+    .build();
+```
+
+### Raw Bytes
+
+```rust
+ResponseBuilder::new()
+    .body(bytes::Bytes::from_static(b"raw bytes"))
+    .build();
+```
+
+## Headers
+
+### Single Header
+
+```rust
+ResponseBuilder::new()
+    .header("X-Custom-Header", "value")
+    .header("X-Another", "value2")
+    .build();
+```
+
+### Multiple Headers
+
+```rust
+ResponseBuilder::new()
+    .headers([
+        ("X-One", "1"),
+        ("X-Two", "2"),
+        ("X-Three", "3"),
+    ])
+    .build();
+```
+
+<Aside type="note">
+Headers set by `.text()`, `.json()`, and `.html()` (like Content-Type) can be overridden with explicit `.header()` calls.
+</Aside>
+
+## Delays
+
+### Initial Delay
+
+Delay before sending the response:
+
+```rust
+use std::time::Duration;
+
+ResponseBuilder::new()
+    .delay(Duration::from_millis(500))
+    .text("Delayed response")
+    .build();
+```
+
+### Chunked Response with Delays
+
+Stream the response body in chunks with delays between:
+
+```rust
+ResponseBuilder::new()
+    .text("chunk1chunk2chunk3chunk4")
+    .chunk_size(6)  // Split into 6-byte chunks
+    .chunk_delay(Duration::from_millis(100))  // 100ms between chunks
+    .build();
+```
+
+This is useful for testing:
+- Streaming responses
+- Progress indicators
+- Timeouts during data transfer
+
+## Convenience Constructors
+
+### Pre-built Responses
+
+```rust
+use orb_mockhttp::Response;
+
+// 200 OK (empty body)
+let ok = Response::ok();
+
+// 404 Not Found (empty body)
+let not_found = Response::not_found();
+
+// 500 Internal Server Error (empty body)
+let error = Response::internal_error();
+```
+
+### Helper Functions
+
+```rust
+use orb_mockhttp::{text_response, json_response};
+
+// Quick text response
+let resp = text_response(200, "Hello");
+
+// Quick JSON response
+let resp = json_response(200, &json!({"ok": true}));
+```
+
+## Using with Routes
+
+### Simple Response
+
+```rust
+server.on_request("/hello")
+    .respond_with(200, "Hello!");  // Creates text response
+```
+
+### JSON Response
+
+```rust
+server.on_request("/api/user")
+    .respond_with_json(200, &json!({"id": 1}));
+```
+
+### Custom Response
+
+```rust
+server.on_request("/custom")
+    .respond_with_fn(|_req| {
+        ResponseBuilder::new()
+            .status(200)
+            .header("X-Custom", "value")
+            .json(&json!({"custom": true}))
+            .build()
+    });
+```
+
+### Delayed Response
+
+```rust
+server.on_request("/slow")
+    .respond_with_delay(
+        200,
+        "Finally!",
+        1024,  // chunk size
+        Duration::from_millis(100)
+    );
+```
+
+### Redirect
+
+```rust
+server.on_request("/old")
+    .respond_with_redirect(301, "/new");
+```
+
+## Response Properties
+
+After building a response, you can inspect its properties:
+
+```rust
+let response = ResponseBuilder::new()
+    .status(201)
+    .header("X-Custom", "value")
+    .text("body content")
+    .delay(Duration::from_millis(100))
+    .build();
+
+assert_eq!(response.status(), http::StatusCode::CREATED);
+assert_eq!(response.headers().get("X-Custom").unwrap(), "value");
+assert_eq!(response.body().as_ref(), b"body content");
+assert_eq!(response.initial_delay(), Some(Duration::from_millis(100)));
+assert!(!response.is_streaming());
+```
+
+## Complete Example
+
+```rust
+use orb_mockhttp::{TestServerBuilder, ResponseBuilder};
+use std::time::Duration;
+use serde_json::json;
+
+#[tokio::test]
+async fn test_responses() {
+    let server = TestServerBuilder::new().build();
+
+    // Simple text
+    server.on_request("/text")
+        .respond_with(200, "plain text");
+
+    // JSON with custom headers
+    server.on_request_fn("/json", |_| {
+        ResponseBuilder::new()
+            .status(200)
+            .header("X-Request-ID", "abc123")
+            .header("Cache-Control", "no-cache")
+            .json(&json!({
+                "status": "ok",
+                "data": [1, 2, 3]
+            }))
+            .build()
+    });
+
+    // Slow streaming response
+    server.on_request_fn("/stream", |_| {
+        ResponseBuilder::new()
+            .status(200)
+            .text("data1|data2|data3|data4|")
+            .chunk_size(6)
+            .chunk_delay(Duration::from_millis(50))
+            .build()
+    });
+
+    // Error response
+    server.on_request_fn("/error", |_| {
+        ResponseBuilder::new()
+            .status(500)
+            .json(&json!({
+                "error": "Internal server error",
+                "code": "ERR_INTERNAL"
+            }))
+            .build()
+    });
+
+    // Run tests...
+}
+```

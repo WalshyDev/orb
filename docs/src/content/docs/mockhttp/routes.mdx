@@ -1,0 +1,268 @@
+---
+title: Routes & Matching
+description: Configure request matching with RouteBuilder
+sidebar:
+    order: 7
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Routes define how the mock server responds to requests. Use `RouteBuilder` to configure matching criteria and responses.
+
+## Basic Route
+
+```rust
+server.on_request("/path")
+    .respond_with(200, "response body");
+```
+
+This matches any request to `/path` with any method.
+
+## Path Matching
+
+Path matching is exact and case-sensitive:
+
+```rust
+// Matches only "/api/users"
+server.on_request("/api/users")
+    .respond_with(200, "[]");
+
+// Matches "/api/Users" (different from above)
+server.on_request("/api/Users")
+    .respond_with(200, "[]");
+```
+
+<Aside type="note">
+Path matching does not support wildcards or regex. Each path is matched exactly.
+</Aside>
+
+## Method Matching
+
+Use `expect_method()` to match specific HTTP methods:
+
+```rust
+server.on_request("/users")
+    .expect_method("GET")
+    .respond_with(200, "[]");
+
+server.on_request("/users")
+    .expect_method("POST")
+    .respond_with(201, r#"{"id": 1}"#);
+```
+
+Without `expect_method()`, the route matches any method.
+
+## Header Matching
+
+### Expect Specific Header Value
+
+```rust
+server.on_request("/api")
+    .expect_header("Authorization", "Bearer token123")
+    .respond_with(200, "authorized");
+```
+
+### Expect Header Present
+
+```rust
+server.on_request("/api")
+    .expect_header_present("X-Request-ID")
+    .respond_with(200, "ok");
+```
+
+### Multiple Headers
+
+```rust
+server.on_request("/api")
+    .expect_header("Content-Type", "application/json")
+    .expect_header("Authorization", "Bearer token")
+    .expect_header_present("X-Request-ID")
+    .respond_with(200, "ok");
+```
+
+## Body Matching
+
+### Exact Match
+
+```rust
+server.on_request("/api")
+    .expect_method("POST")
+    .expect_body(r#"{"name": "Alice"}"#.to_string())
+    .respond_with(201, "created");
+```
+
+### Contains Substring
+
+```rust
+server.on_request("/api")
+    .expect_method("POST")
+    .expect_body_contains("Alice".to_string())
+    .respond_with(201, "created");
+```
+
+## Route Priority
+
+When multiple routes match, the first registered route wins:
+
+```rust
+// This matches first
+server.on_request("/users")
+    .expect_method("GET")
+    .respond_with(200, "list of users");
+
+// This never matches if the above matches
+server.on_request("/users")
+    .respond_with(200, "fallback");
+```
+
+<Aside type="tip">
+Register more specific routes before less specific ones.
+</Aside>
+
+## Dynamic Routes
+
+Use `on_request_fn` for dynamic responses:
+
+```rust
+use orb_mockhttp::ResponseBuilder;
+
+server.on_request_fn("/echo", |req| {
+    ResponseBuilder::new()
+        .status(200)
+        .text(req.text_lossy())
+        .build()
+});
+```
+
+The closure has full access to the request:
+
+```rust
+server.on_request_fn("/api/users", |req| {
+    // Check method
+    if req.method() == "GET" {
+        return ResponseBuilder::new()
+            .status(200)
+            .json(&vec!["Alice", "Bob"])
+            .build();
+    }
+
+    // Check query parameters
+    if let Some(id) = req.query_param("id") {
+        return ResponseBuilder::new()
+            .status(200)
+            .text(format!("User ID: {}", id))
+            .build();
+    }
+
+    ResponseBuilder::new()
+        .status(400)
+        .text("Bad request")
+        .build()
+});
+```
+
+## Response with Delay
+
+Add a delay before responding:
+
+```rust
+use std::time::Duration;
+
+server.on_request("/slow")
+    .delay(Duration::from_millis(500))
+    .respond_with(200, "finally!");
+```
+
+## Streaming Response with Chunk Delays
+
+```rust
+use std::time::Duration;
+
+server.on_request("/stream")
+    .respond_with_delay(
+        200,
+        "chunk1chunk2chunk3",
+        6,  // chunk size in bytes
+        Duration::from_millis(100)  // delay between chunks
+    );
+```
+
+## Redirect Response
+
+```rust
+server.on_request("/old-path")
+    .respond_with_redirect(301, "/new-path");
+```
+
+## JSON Response
+
+```rust
+use serde_json::json;
+
+server.on_request("/api/user")
+    .respond_with_json(200, &json!({
+        "id": 1,
+        "name": "Alice"
+    }));
+```
+
+## Route Call Count
+
+Check how many times a route was called:
+
+```rust
+let route = server.on_request("/api")
+    .respond_with(200, "ok")
+    .build();
+
+// After making requests...
+assert_eq!(route.call_count(), 3);
+
+// Or use convenience methods
+route.assert_called(3);
+route.assert_called_once();
+```
+
+## Complete Example
+
+```rust
+use orb_mockhttp::{TestServerBuilder, ResponseBuilder};
+use std::time::Duration;
+use serde_json::json;
+
+#[tokio::test]
+async fn test_routing() {
+    let server = TestServerBuilder::new().build();
+
+    // GET /users - list users
+    server.on_request("/users")
+        .expect_method("GET")
+        .respond_with_json(200, &json!(["Alice", "Bob"]));
+
+    // POST /users - create user (with validation)
+    server.on_request("/users")
+        .expect_method("POST")
+        .expect_header("Content-Type", "application/json")
+        .expect_body_contains("name")
+        .respond_with_json(201, &json!({"id": 1}));
+
+    // GET /users/:id - dynamic response
+    server.on_request_fn("/users/1", |_req| {
+        ResponseBuilder::new()
+            .status(200)
+            .json(&json!({"id": 1, "name": "Alice"}))
+            .build()
+    });
+
+    // Slow endpoint
+    server.on_request("/slow")
+        .delay(Duration::from_secs(1))
+        .respond_with(200, "done");
+
+    // Redirect
+    server.on_request("/legacy")
+        .respond_with_redirect(301, "/users");
+
+    // Run your tests against server.url("/users")...
+}
+```

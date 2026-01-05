@@ -1,0 +1,239 @@
+---
+title: Development Setup
+description: Set up your development environment for contributing to orb
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## Prerequisites
+
+- **Rust 1.90+** (nightly recommended)
+- **Git**
+- **Make** (optional but recommended)
+
+## Getting Started
+
+<Steps>
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/WalshyDev/orb.git
+   cd orb
+   ```
+
+2. **Build the project**
+
+   ```bash
+   make build
+   # or
+   cargo build
+   ```
+
+3. **Run the tests**
+
+   ```bash
+   make test
+   # or
+   cargo test
+   ```
+
+4. **Run orb locally**
+
+   ```bash
+   ./target/debug/orb --help
+   ```
+</Steps>
+
+## Project Structure
+
+```
+orb/
+├── packages/
+│   ├── orb-cli/        # CLI application
+│   │   ├── src/
+│   │   └── tests/
+│   ├── orb-client/     # HTTP client library
+│   │   └── src/
+│   └── orb-mockhttp/   # Mock HTTP server
+│       ├── src/
+│       └── tests/
+├── Cargo.toml          # Workspace config
+├── Makefile            # Build automation
+└── README.md
+```
+
+## Build Commands
+
+```bash
+# Debug build
+make build
+
+# Release build
+make release
+
+# Run tests
+make test
+
+# Generate coverage report
+make coverage
+
+# Lint check
+make lint
+
+# Auto-fix lint issues
+make fix
+
+# Clean build artifacts
+make clean
+
+# Show binary size
+make size
+```
+
+## Running Tests
+
+```bash
+# All tests
+cargo test
+
+# Specific package
+cargo test -p orb-cli
+cargo test -p orb-client
+cargo test -p orb-mockhttp
+
+# Specific test
+cargo test test_name
+
+# With output
+cargo test -- --nocapture
+```
+
+## Code Coverage
+
+```bash
+make coverage
+```
+
+Opens an HTML coverage report in your browser.
+
+<Aside type="note">
+Coverage requires `cargo-llvm-cov`. Install with: `cargo install cargo-llvm-cov`
+</Aside>
+
+## Development Workflow
+
+### Making Changes
+
+1. Create a feature branch
+   ```bash
+   git checkout -b feature/my-feature
+   ```
+
+2. Make your changes
+
+3. Run tests
+   ```bash
+   make test
+   ```
+
+4. Run lints
+   ```bash
+   make lint
+   ```
+
+5. Commit your changes
+   ```bash
+   git commit -m "Add my feature"
+   ```
+
+### Adding a New CLI Option
+
+1. Add the option to `packages/orb-cli/src/cli.rs`
+2. Add validation (if needed) in `cli.rs`
+3. Call validation from `main.rs`
+4. Implement the feature in appropriate module
+5. Add tests to `packages/orb-cli/tests/options.rs`
+
+### Adding Tests
+
+Use `test_case` for parameterized tests:
+
+```rust
+use test_case::test_case;
+
+#[test_case("input1", "expected1"; "test name 1")]
+#[test_case("input2", "expected2"; "test name 2")]
+fn test_feature(input: &str, expected: &str) {
+    // Test implementation
+}
+```
+
+For HTTP tests, use `orb-mockhttp`:
+
+```rust
+use orb_mockhttp::TestServerBuilder;
+
+#[tokio::test]
+async fn test_http_feature() {
+    let server = TestServerBuilder::new().build();
+
+    server.on_request("/test")
+        .respond_with(200, "OK");
+
+    // Test against server.url("/test")
+}
+```
+
+## Code Style
+
+- Use `rustfmt` for formatting (`make fix`)
+- Follow existing patterns in the codebase
+- Write helpful error messages
+- Use the `fatal!` macro only in CLI layer
+- Document public APIs with doc comments
+
+## Testing Guidelines
+
+1. **Use `test_case`** for variations of the same test
+2. **Use `orb-mockhttp`** for HTTP integration tests
+3. **Test error cases** as well as success cases
+4. **Test edge cases** (empty inputs, special characters, etc.)
+
+## Debugging
+
+### Verbose Output
+
+```bash
+# See request/response details
+./target/debug/orb -v https://example.com
+```
+
+### Test Output
+
+```bash
+# Show stdout during tests
+cargo test -- --nocapture
+```
+
+### Debug Build
+
+```bash
+# Full debug symbols
+RUST_BACKTRACE=1 ./target/debug/orb https://example.com
+```
+
+## Cross-Platform Building
+
+```bash
+# macOS Universal Binary
+make build-macos
+
+# Linux
+make build-linux
+
+# Windows
+make build-windows
+
+# All platforms
+make build-binaries
+```

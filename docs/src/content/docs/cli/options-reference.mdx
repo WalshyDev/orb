@@ -1,0 +1,329 @@
+---
+title: Options Reference
+description: Complete reference of all orb CLI options
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Complete reference of all orb command-line options.
+
+## Usage
+
+```
+orb [OPTIONS] <URL>
+```
+
+## Request Options
+
+| Option | Description |
+|--------|-------------|
+| `-X, --request <METHOD>` | HTTP method (GET, POST, PUT, DELETE, etc.). Default: GET |
+| `-H, --header <HEADER>` | Add header in `Name: Value` format. Can be used multiple times |
+| `-d, --data <DATA>` | Request body. Use `@filename` to read from file |
+| `--json <JSON>` | Send JSON data (sets Content-Type: application/json) |
+| `-F, --form <FIELD>` | Multipart form field. Use `field=@file` for file upload |
+
+## Authentication
+
+| Option | Description |
+|--------|-------------|
+| `-u, --user <USER:PASS>` | HTTP Basic authentication |
+| `--bearer <TOKEN>` | Bearer token authentication |
+
+## Cookies
+
+| Option | Description |
+|--------|-------------|
+| `-b, --cookie <DATA>` | Send cookies. Use `@filename` to read from file |
+| `-c, --cookie-jar <FILE>` | Save cookies to file (Netscape format) |
+
+## Output
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output <FILE>` | Write response body to file |
+| `-i, --include` | Include response headers in output |
+| `-I, --head` | Show response headers only (HEAD request) |
+| `-v, --verbose` | Verbose mode (show request/response details) |
+| `-s, --silent` | Silent mode (suppress all output except body) |
+| `-w, --write-out` | Show statistics (http_code, size, timing) |
+| `-#, --progress` | Show progress bar |
+
+## TLS/SSL
+
+| Option | Description |
+|--------|-------------|
+| `-k, --insecure` | Skip certificate verification |
+| `--cert <FILE>` | Client certificate file (PEM) |
+| `--key <FILE>` | Client certificate key file (PEM) |
+| `--cacert <FILE>` | CA certificate file (PEM) |
+
+## Protocol
+
+| Option | Description |
+|--------|-------------|
+| `--http1.1` | Force HTTP/1.1 |
+| `--http2` | Force HTTP/2 |
+| `--http3` | Force HTTP/3 (QUIC) |
+
+## Compression
+
+| Option | Description |
+|--------|-------------|
+| `--compressed` | Accept and decompress responses (zstd, br, gzip, deflate) |
+| `--compress-algo <ALGO>` | Request specific algorithm: gzip, deflate, brotli, zstd |
+
+## Timeouts & Redirects
+
+| Option | Description |
+|--------|-------------|
+| `--connect-timeout <SECS>` | Connection timeout in seconds. Default: 10 |
+| `-m, --max-time <SECS>` | Maximum total request time in seconds |
+| `-L, --location` | Follow redirects |
+| `--max-redirs <NUM>` | Maximum redirects to follow. Default: 10 |
+
+## Network
+
+| Option | Description |
+|--------|-------------|
+| `-x, --proxy <URL>` | Proxy URL (http:// or socks5://) |
+| `--connect-to <RULE>` | Override DNS: `HOST1:PORT1:HOST2:PORT2` |
+
+## Headers
+
+| Option | Description |
+|--------|-------------|
+| `-A, --user-agent <STRING>` | Custom User-Agent header |
+| `-e, --referer <URL>` | Set Referer header |
+
+## WebSocket
+
+| Option | Description |
+|--------|-------------|
+| `--ws-message <MSG>` | Send WebSocket message and exit |
+
+## Option Details
+
+### `-X, --request`
+
+Specify the HTTP method. Can be any valid method:
+
+```bash
+orb -X POST https://example.com
+orb -X PUT https://example.com
+orb -X DELETE https://example.com
+orb -X PATCH https://example.com
+orb -X OPTIONS https://example.com
+```
+
+### `-H, --header`
+
+Add custom headers. Can be used multiple times:
+
+```bash
+orb -H "Authorization: Bearer token" \
+    -H "Accept: application/json" \
+    -H "X-Custom: value" \
+    https://example.com
+```
+
+### `-d, --data`
+
+Send request body data. Sets `Content-Type: application/x-www-form-urlencoded`:
+
+```bash
+# Inline data
+orb -d "key=value&other=data" https://example.com
+
+# From file
+orb -d @payload.txt https://example.com
+```
+
+<Aside type="note">
+Conflicts with `--json` and `-F`.
+</Aside>
+
+### `--json`
+
+Send JSON data. Sets `Content-Type: application/json`:
+
+```bash
+orb --json '{"name": "Alice"}' https://example.com
+```
+
+### `-F, --form`
+
+Send multipart form data:
+
+```bash
+# Text field
+orb -F "name=Alice" https://example.com
+
+# File upload
+orb -F "file=@document.pdf" https://example.com
+
+# Multiple fields
+orb -F "name=Alice" -F "avatar=@photo.jpg" https://example.com
+```
+
+### `-u, --user`
+
+HTTP Basic authentication:
+
+```bash
+orb -u username:password https://example.com
+orb -u username: https://example.com  # Empty password
+```
+
+### `--bearer`
+
+Bearer token authentication:
+
+```bash
+orb --bearer "eyJhbGciOi..." https://example.com
+```
+
+### `-b, --cookie`
+
+Send cookies:
+
+```bash
+# Inline cookie
+orb -b "session=abc123" https://example.com
+
+# From file (Netscape format)
+orb -b @cookies.txt https://example.com
+```
+
+### `-c, --cookie-jar`
+
+Save response cookies to file:
+
+```bash
+orb -c cookies.txt https://example.com
+```
+
+### `-o, --output`
+
+Save response body to file:
+
+```bash
+orb -o response.json https://api.example.com
+orb -o file.zip https://example.com/file.zip
+```
+
+### `-v, --verbose`
+
+Show detailed request/response information:
+
+```bash
+orb -v https://example.com
+```
+
+### `-s, --silent`
+
+Suppress all output except response body:
+
+```bash
+orb -s https://example.com > response.txt
+```
+
+### `-w, --write-out`
+
+Show request statistics:
+
+```bash
+orb -w https://example.com
+# Output: http_code: 200, size_download: 1234, time_total: 0.456
+```
+
+### `-k, --insecure`
+
+Skip TLS certificate verification:
+
+```bash
+orb -k https://self-signed.example.com
+```
+
+### `--cert` and `--key`
+
+Client certificate for mTLS:
+
+```bash
+# Combined file
+orb --cert combined.pem https://example.com
+
+# Separate files
+orb --cert client.pem --key client-key.pem https://example.com
+```
+
+### `--cacert`
+
+Custom CA certificate:
+
+```bash
+orb --cacert ca.pem https://internal.example.com
+```
+
+### `--http1.1`, `--http2`, `--http3`
+
+Force specific HTTP protocol version:
+
+```bash
+orb --http1.1 https://example.com
+orb --http2 https://example.com
+orb --http3 https://example.com  # Requires server support
+```
+
+### `--compressed`
+
+Accept compressed responses:
+
+```bash
+orb --compressed https://example.com
+# Sends: Accept-Encoding: zstd, br, gzip, deflate
+```
+
+### `--connect-timeout` and `-m, --max-time`
+
+Set timeouts:
+
+```bash
+orb --connect-timeout 5 -m 30 https://example.com
+```
+
+### `-L, --location`
+
+Follow redirects:
+
+```bash
+orb -L https://httpbin.org/redirect/3
+orb -L --max-redirs 5 https://example.com
+```
+
+### `-x, --proxy`
+
+Use a proxy:
+
+```bash
+orb -x http://proxy:8080 https://example.com
+orb -x socks5://proxy:1080 https://example.com
+```
+
+### `--connect-to`
+
+Override DNS routing:
+
+```bash
+orb --connect-to "api.example.com:443:localhost:8443" https://api.example.com
+```
+
+### `--ws-message`
+
+Send a WebSocket message:
+
+```bash
+orb wss://echo.websocket.org --ws-message "Hello!"
+```

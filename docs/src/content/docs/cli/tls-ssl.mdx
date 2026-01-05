@@ -1,0 +1,133 @@
+---
+title: TLS & SSL
+description: Certificate configuration and TLS options
+sidebar:
+  order: 12
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orb uses TLS for all HTTPS connections. This page covers certificate verification, client certificates (mTLS), and related options.
+
+## Insecure Mode
+
+Use `-k` or `--insecure` to skip certificate verification:
+
+```bash
+orb -k https://self-signed.example.com
+```
+
+This is useful for:
+- Self-signed certificates
+- Development environments
+- Testing with invalid certificates
+
+<Aside type="caution">
+Never use `--insecure` in production. It disables all certificate validation, making your connection vulnerable to man-in-the-middle attacks.
+</Aside>
+
+## Custom CA Certificate
+
+Use `--cacert` to specify a custom CA certificate for verification:
+
+```bash
+orb --cacert /path/to/ca.pem https://internal.example.com
+```
+
+This is useful for:
+- Internal PKI / private CAs
+- Self-signed root certificates
+- Corporate proxies with custom CAs
+
+The CA certificate must be in PEM format.
+
+## Client Certificates (mTLS)
+
+For mutual TLS authentication, provide a client certificate:
+
+### Combined Certificate and Key
+
+If your PEM file contains both the certificate and private key:
+
+```bash
+orb --cert client-combined.pem https://secure.example.com
+```
+
+### Separate Certificate and Key
+
+If they're in separate files:
+
+```bash
+orb --cert client.pem --key client-key.pem https://secure.example.com
+```
+
+### Key Formats
+
+Orb supports:
+- PEM format (`.pem`) - Recommended
+- The private key can be RSA, ECDSA, or Ed25519
+
+<Aside type="note">
+The certificate file must contain the full certificate chain if the server requires it.
+</Aside>
+
+## TLS Versions
+
+Orb uses TLS 1.2 and TLS 1.3. The version is automatically negotiated based on server support.
+
+## Verbose TLS Information
+
+Use `-v` to see TLS handshake details:
+
+```bash
+orb -v https://example.com
+```
+
+Output includes:
+```
+* TLS handshake completed
+*   TLS version: TLSv1.3
+*   Cipher: TLS_AES_256_GCM_SHA384
+*   ALPN: h2
+*   Server certificate:
+*     Subject: CN=example.com
+*     Issuer: CN=DigiCert TLS RSA SHA256 2020 CA1
+*     Valid from: Jan 01 00:00:00 2024 GMT
+*     Valid until: Dec 31 23:59:59 2024 GMT
+```
+
+## Common TLS Scenarios
+
+### Internal Services with Private CA
+
+```bash
+orb --cacert /etc/ssl/internal-ca.pem \
+  https://internal-api.company.com/health
+```
+
+### mTLS Protected API
+
+```bash
+orb --cert client.pem \
+  --key client-key.pem \
+  --cacert server-ca.pem \
+  https://mtls-api.example.com/secure
+```
+
+### Development with Self-Signed Cert
+
+```bash
+# Quick testing (insecure)
+orb -k https://localhost:8443
+
+# Proper way (add your dev CA)
+orb --cacert dev-ca.pem https://localhost:8443
+```
+
+### Docker Registry with Custom CA
+
+```bash
+orb --cacert /etc/docker/certs.d/registry.example.com/ca.crt \
+  -u admin:password \
+  https://registry.example.com/v2/_catalog
+```

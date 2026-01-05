@@ -1,0 +1,73 @@
+name: CI
+
+on: push
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Faster linking on Linux
+  CARGO_INCREMENTAL: 0
+  # Reduce I/O for faster builds
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Run stable on all platforms
+          - os: ubuntu-latest
+            rust: stable
+          - os: macos-latest
+            rust: stable
+          - os: windows-latest
+            rust: stable
+          # Only run beta on Linux for now
+          - os: ubuntu-latest
+            rust: beta
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Include rust version in cache key for beta builds
+          prefix-key: "v1-rust-${{ matrix.rust }}"
+          # Cache the target directory
+          cache-targets: true
+          # Share cache across branches
+          shared-key: ${{ matrix.os }}-${{ matrix.rust }}
+
+      - name: Build release
+        run: make release
+
+      - name: Test
+        run: make test
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+          shared-key: lint
+
+      - name: Run linting
+        run: make lint

@@ -1,0 +1,250 @@
+---
+title: TLS Configuration
+description: Configure TLS certificates for HTTPS testing
+sidebar:
+    order: 9
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+orb-mockhttp can automatically generate TLS certificates or use custom ones for HTTPS testing.
+
+## Auto-Generated Certificates
+
+The simplest way to enable TLS is with `.with_tls()`:
+
+```rust
+let server = TestServerBuilder::new()
+    .with_tls()
+    .build();
+```
+
+This automatically generates a self-signed certificate valid for:
+- `localhost`
+- `127.0.0.1`
+
+<Aside type="note">
+Auto-generated certificates are created fresh for each test run. They're not persisted.
+</Aside>
+
+## Custom Certificates
+
+### From Files
+
+```rust
+use std::path::PathBuf;
+
+let server = TestServerBuilder::new()
+    .with_certs(
+        PathBuf::from("path/to/certificate.pem"),
+        PathBuf::from("path/to/private-key.pem")
+    )
+    .build();
+```
+
+### From TlsConfig
+
+```rust
+use orb_mockhttp::TlsConfig;
+use std::path::PathBuf;
+
+// Load from files
+let tls_config = TlsConfig::from_files(
+    PathBuf::from("cert.pem"),
+    PathBuf::from("key.pem")
+).expect("Failed to load certificates");
+
+let server = TestServerBuilder::new()
+    .with_tls_config(tls_config)
+    .build();
+```
+
+### Generating Programmatically
+
+```rust
+use orb_mockhttp::TlsConfig;
+
+// Generate new self-signed certificate
+let tls_config = TlsConfig::generate();
+
+let server = TestServerBuilder::new()
+    .with_tls_config(tls_config)
+    .build();
+```
+
+## Accessing Certificates
+
+After building the server, you can access the certificate for client configuration:
+
+### PEM Format
+
+```rust
+let server = TestServerBuilder::new().with_tls().build();
+
+// Get PEM-encoded certificate (for most HTTP clients)
+if let Some(pem) = server.cert_pem() {
+    println!("Certificate:\n{}", pem);
+}
+```
+
+### DER Format
+
+```rust
+// Get DER-encoded certificate (raw bytes)
+if let Some(der) = server.cert_der() {
+    println!("Certificate: {} bytes", der.len());
+}
+```
+
+## Configuring HTTP Clients
+
+### reqwest
+
+```rust
+use reqwest::Certificate;
+
+let server = TestServerBuilder::new().with_tls().build();
+let cert_pem = server.cert_pem().unwrap();
+
+let cert = Certificate::from_pem(cert_pem.as_bytes()).unwrap();
+
+let client = reqwest::Client::builder()
+    .add_root_certificate(cert)
+    .build()
+    .unwrap();
+
+// Now client trusts the mock server's certificate
+let response = client.get(server.url("/test")).send().await.unwrap();
+```
+
+### Native TLS / rustls
+
+```rust
+use rustls::{RootCertStore, Certificate};
+
+let server = TestServerBuilder::new().with_tls().build();
+let cert_der = server.cert_der().unwrap();
+
+let mut root_store = RootCertStore::empty();
+root_store.add(&Certificate(cert_der.to_vec())).unwrap();
+
+// Use root_store with your TLS configuration
+```
+
+## TLS and Protocols
+
+When TLS is enabled, you can use all HTTP protocols on the same port:
+
+```rust
+use orb_mockhttp::HttpProtocol;
+
+// All protocols (default with TLS)
+let server = TestServerBuilder::new()
+    .with_tls()
+    .build();
+
+assert!(server.supports_protocol(HttpProtocol::Http1));
+assert!(server.supports_protocol(HttpProtocol::Http2));
+assert!(server.supports_protocol(HttpProtocol::Http3));
+
+// Specific protocols
+let http2_only = TestServerBuilder::new()
+    .with_tls()
+    .with_protocols(&[HttpProtocol::Http2])
+    .build();
+```
+
+<Aside type="tip">
+HTTP/2 and HTTP/3 require TLS. If you specify these protocols, TLS is automatically enabled.
+</Aside>
+
+## Certificate Requirements
+
+### PEM Format
+
+Certificate and key files must be in PEM format:
+
+```
+-----BEGIN CERTIFICATE-----
+MIIBkTCB+wIJAK...
+-----END CERTIFICATE-----
+```
+
+```
+-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBg...
+-----END PRIVATE KEY-----
+```
+
+### Supported Key Types
+
+- RSA
+- ECDSA (P-256, P-384)
+- Ed25519
+
+## Complete Example
+
+```rust
+use orb_mockhttp::{TestServerBuilder, TlsConfig};
+use std::path::PathBuf;
+
+#[tokio::test]
+async fn test_with_tls() {
+    // Option 1: Auto-generated certificate
+    let server = TestServerBuilder::new()
+        .with_tls()
+        .build();
+
+    server.on_request("/secure")
+        .respond_with(200, "Secret data");
+
+    // Configure client with server's certificate
+    let cert = reqwest::Certificate::from_pem(
+        server.cert_pem().unwrap().as_bytes()
+    ).unwrap();
+
+    let client = reqwest::Client::builder()
+        .add_root_certificate(cert)
+        .build()
+        .unwrap();
+
+    let resp = client.get(server.url("/secure"))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.text().await.unwrap(), "Secret data");
+}
+
+#[tokio::test]
+async fn test_with_custom_certs() {
+    // Option 2: Custom certificates
+    let server = TestServerBuilder::new()
+        .with_certs(
+            PathBuf::from("tests/certs/server.pem"),
+            PathBuf::from("tests/certs/server-key.pem")
+        )
+        .build();
+
+    // Test as above...
+}
+```
+
+## Troubleshooting
+
+### Certificate Not Trusted
+
+If your HTTP client rejects the connection:
+
+1. Make sure you're adding the certificate to your client's trust store
+2. Use `cert_pem()` for most clients, `cert_der()` for low-level APIs
+3. Verify the URL matches certificate SANs (localhost or 127.0.0.1)
+
+### Protocol Errors
+
+If HTTP/2 or HTTP/3 fails:
+
+1. Ensure TLS is enabled (`.with_tls()`)
+2. Check that the client supports the protocol
+3. Use verbose logging to see ALPN negotiation

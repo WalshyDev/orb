@@ -1,0 +1,60 @@
+---
+title: Compression
+description: Request and response compression support
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orb supports automatic decompression of responses encoded with gzip, deflate, Brotli, and Zstandard.
+
+## Automatic Decompression
+
+Use `--compressed` to accept and automatically decompress compressed responses:
+
+```bash
+orb --compressed https://example.com
+```
+
+This sends the header:
+```
+Accept-Encoding: zstd, br, gzip, deflate
+```
+
+The server may respond with a compressed body, which orb automatically decompresses before output.
+
+## Specific Compression Algorithm
+
+Use `--compress-algo` to request a specific algorithm:
+
+```bash
+orb --compress-algo gzip https://example.com
+```
+
+Available algorithms:
+- `gzip` - Most widely supported
+- `deflate` - Legacy, widely supported
+- `brotli` / `br` - Better compression, good support
+- `zstd` - Best compression, growing support
+
+<Aside type="note">
+Servers are not required to honor your compression preference. The response may use any algorithm (or none).
+</Aside>
+
+## How Decompression Works
+
+1. Orb sends `Accept-Encoding` header with supported algorithms
+2. Server may respond with `Content-Encoding` header
+3. Orb checks the header and decompresses accordingly
+4. Decompressed content is written to output
+
+```bash
+# Request with verbose to see headers
+orb -v --compressed https://example.com
+```
+
+```
+> Accept-Encoding: zstd, br, gzip, deflate
+< Content-Encoding: gzip
+```

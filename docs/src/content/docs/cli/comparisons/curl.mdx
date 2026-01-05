@@ -1,0 +1,287 @@
+---
+title: Orb vs cURL
+description: Feature comparison between orb and cURL
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orb is designed as a modern alternative to cURL with a familiar command-line interface. This page compares the two tools.
+
+## Feature Comparison
+
+| Feature | Orb | cURL |
+|---------|-----|------|
+| HTTP/1.1 | ✓ | ✓ |
+| HTTP/2 | ✓ | ✓ |
+| HTTP/3 (QUIC) | ✓ | ✓ (experimental) |
+| WebSocket | ✓ | ✗ |
+| JSON shorthand | `--json` | Requires `-H` + `-d` |
+| Compression | zstd, br, gzip, deflate | gzip, deflate, br |
+| Progress bar | ✓ | ✓ |
+| Cookie jar | ✓ | ✓ |
+| Multipart forms | ✓ | ✓ |
+| Proxy support | HTTP, SOCKS5 | HTTP, SOCKS4/5 |
+| mTLS | ✓ | ✓ |
+| Single binary | ✓ | Depends on build |
+
+## Side-by-Side Examples
+
+### Simple GET Request
+
+```bash
+# cURL
+curl https://api.example.com/users
+
+# Orb
+orb https://api.example.com/users
+```
+
+### POST with JSON
+
+```bash
+# cURL
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Alice"}' \
+  https://api.example.com/users
+
+# Orb (simpler with --json)
+orb -X POST --json '{"name": "Alice"}' https://api.example.com/users
+```
+
+### Custom Headers
+
+```bash
+# cURL
+curl -H "Authorization: Bearer token" \
+     -H "Accept: application/json" \
+     https://api.example.com
+
+# Orb (identical)
+orb -H "Authorization: Bearer token" \
+    -H "Accept: application/json" \
+    https://api.example.com
+```
+
+### Basic Authentication
+
+```bash
+# cURL
+curl -u username:password https://api.example.com
+
+# Orb (identical)
+orb -u username:password https://api.example.com
+```
+
+### Bearer Token
+
+```bash
+# cURL
+curl -H "Authorization: Bearer token123" https://api.example.com
+
+# Orb (shorthand available)
+orb --bearer token123 https://api.example.com
+```
+
+### File Upload
+
+```bash
+# cURL
+curl -F "file=@photo.jpg" https://api.example.com/upload
+
+# Orb (identical)
+orb -F "file=@photo.jpg" https://api.example.com/upload
+```
+
+### Download to File
+
+```bash
+# cURL
+curl -o file.zip https://example.com/file.zip
+
+# Orb (identical)
+orb -o file.zip https://example.com/file.zip
+```
+
+### Follow Redirects
+
+```bash
+# cURL
+curl -L https://short.url/abc
+
+# Orb (identical)
+orb -L https://short.url/abc
+```
+
+### Verbose Output
+
+```bash
+# cURL
+curl -v https://example.com
+
+# Orb (identical)
+orb -v https://example.com
+```
+
+### Headers Only
+
+```bash
+# cURL
+curl -I https://example.com
+
+# Orb (identical)
+orb -I https://example.com
+```
+
+### Insecure (Skip TLS Verification)
+
+```bash
+# cURL
+curl -k https://self-signed.example.com
+
+# Orb (identical)
+orb -k https://self-signed.example.com
+```
+
+### HTTP/2 Specific
+
+```bash
+# cURL
+curl --http2 https://example.com
+
+# Orb (identical)
+orb --http2 https://example.com
+```
+
+### HTTP/3 Specific
+
+```bash
+# cURL
+curl --http3 https://example.com
+
+# Orb (identical)
+orb --http3 https://example.com
+```
+
+### Compressed Response
+
+```bash
+# cURL
+curl --compressed https://example.com
+
+# Orb (identical)
+orb --compressed https://example.com
+```
+
+### Timeout
+
+```bash
+# cURL
+curl --connect-timeout 5 -m 30 https://example.com
+
+# Orb (identical)
+orb --connect-timeout 5 -m 30 https://example.com
+```
+
+### Cookie Jar
+
+```bash
+# cURL
+curl -b cookies.txt -c cookies.txt https://example.com
+
+# Orb (identical)
+orb -b @cookies.txt -c cookies.txt https://example.com
+```
+
+<Aside type="note">
+Orb uses `@` prefix for reading cookie files (`-b @cookies.txt`), while cURL doesn't require it (`-b cookies.txt`).
+</Aside>
+
+### Proxy
+
+```bash
+# cURL
+curl -x http://proxy:8080 https://example.com
+
+# Orb (identical)
+orb -x http://proxy:8080 https://example.com
+```
+
+### DNS Override
+
+```bash
+# cURL
+curl --connect-to example.com:443:localhost:8443 https://example.com
+
+# Orb (identical)
+orb --connect-to example.com:443:localhost:8443 https://example.com
+```
+
+## Orb-Only Features
+
+### WebSocket Support
+
+```bash
+# Connect and send message
+orb wss://echo.websocket.org --ws-message "Hello!"
+
+# Interactive mode
+orb wss://echo.websocket.org
+```
+
+cURL does not support WebSocket connections.
+
+### Bearer Token Shorthand
+
+```bash
+# Orb
+orb --bearer "your-token" https://api.example.com
+
+# cURL equivalent
+curl -H "Authorization: Bearer your-token" https://api.example.com
+```
+
+### JSON Shorthand
+
+```bash
+# Orb
+orb --json '{"key": "value"}' https://api.example.com
+
+# cURL equivalent
+curl -H "Content-Type: application/json" -d '{"key": "value"}' https://api.example.com
+```
+
+## cURL-Only Features
+
+Some cURL features not yet in orb:
+
+- FTP, SFTP, SCP protocols (Will not be supported)
+- TFTP, LDAP, DICT protocols (Will not be supported)
+- Globbing/URL patterns (`[1-10]`, `{a,b,c}`)
+- Config files (`.curlrc`)
+- `--retry` with automatic backoff
+- `--limit-rate` bandwidth throttling
+- `HTTP_PROXY` / `HTTPS_PROXY` environment variables
+
+## Migration Tips
+
+1. **Most options are identical** - Start by trying your cURL command with `orb` instead
+2. **Use `--json` for JSON APIs** - Simpler than `-H "Content-Type: ..." -d ...`
+3. **Use `--bearer` for tokens** - Cleaner than `-H "Authorization: ..."`
+4. **WebSocket support** - Use `ws://` or `wss://` URLs directly
+
+## When to Use Each
+
+### Use Orb When
+
+- You need WebSocket support
+- You're working with modern HTTP/2 and HTTP/3 APIs
+- You're workin with modern compression formats like zstd
+- You prefer the `--json` and `--bearer` shortcuts
+
+### Use cURL When
+
+- You need FTP or other non-HTTP protocols
+- You rely on URL globbing patterns
+- You need specific cURL-only features
+- Compatibility with existing scripts is critical

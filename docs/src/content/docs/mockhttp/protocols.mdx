@@ -1,0 +1,254 @@
+---
+title: Protocol Support
+description: Testing with HTTP/1.1, HTTP/2, and HTTP/3
+sidebar:
+    order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+orb-mockhttp supports all major HTTP versions, allowing you to test protocol-specific behavior.
+
+## Available Protocols
+
+```rust
+use orb_mockhttp::HttpProtocol;
+
+// Available protocols
+HttpProtocol::Http1  // HTTP/1.1
+HttpProtocol::Http2  // HTTP/2
+HttpProtocol::Http3  // HTTP/3 (QUIC)
+
+// Get all protocols
+let all = HttpProtocol::all();  // [Http1, Http2, Http3]
+```
+
+## Default Behavior
+
+### Without TLS
+
+```rust
+let server = TestServerBuilder::new().build();
+
+// Only HTTP/1.1 is available
+assert!(server.supports_protocol(HttpProtocol::Http1));
+assert!(!server.supports_protocol(HttpProtocol::Http2));
+assert!(!server.supports_protocol(HttpProtocol::Http3));
+```
+
+### With TLS
+
+```rust
+let server = TestServerBuilder::new()
+    .with_tls()
+    .build();
+
+// All protocols available on the same port
+assert!(server.supports_protocol(HttpProtocol::Http1));
+assert!(server.supports_protocol(HttpProtocol::Http2));
+assert!(server.supports_protocol(HttpProtocol::Http3));
+```
+
+## Selecting Specific Protocols
+
+Use `with_protocols()` to limit available protocols:
+
+```rust
+// HTTP/2 only
+let server = TestServerBuilder::new()
+    .with_tls()
+    .with_protocols(&[HttpProtocol::Http2])
+    .build();
+
+// HTTP/1.1 and HTTP/2 (no HTTP/3)
+let server = TestServerBuilder::new()
+    .with_tls()
+    .with_protocols(&[HttpProtocol::Http1, HttpProtocol::Http2])
+    .build();
+
+// HTTP/3 only
+let server = TestServerBuilder::new()
+    .with_tls()
+    .with_protocols(&[HttpProtocol::Http3])
+    .build();
+```
+
+<Aside type="note">
+Selecting HTTP/2 or HTTP/3 automatically enables TLS, since these protocols require encryption.
+</Aside>
+
+## Protocol Detection in Handlers
+
+Access the protocol in request handlers:
+
+```rust
+server.on_request_fn("/version", |req| {
+    let protocol = match req.protocol() {
+        HttpProtocol::Http1 => "HTTP/1.1",
+        HttpProtocol::Http2 => "HTTP/2",
+        HttpProtocol::Http3 => "HTTP/3",
+    };
+
+    ResponseBuilder::new()
+        .text(format!("Protocol: {}", protocol))
+        .build()
+});
+```
+
+Or check the HTTP version:
+
+```rust
+server.on_request_fn("/version", |req| {
+    let version = req.version();  // http::Version
+
+    ResponseBuilder::new()
+        .text(format!("Version: {:?}", version))
+        .build()
+});
+```
+
+## Same Port for All Protocols
+
+When TLS is enabled, all protocols share the same port number:
+
+```rust
+let server = TestServerBuilder::new()
+    .with_tls()
+    .build();
+
+let port = server.port();
+
+// HTTP/1.1 and HTTP/2 use TCP on this port
+// HTTP/3 uses QUIC (UDP) on this port
+
+// Same URL works for all protocols
+let url = server.url("/api");
+// The client's protocol choice determines which is used
+```
+
+## Testing Protocol-Specific Behavior
+
+### HTTP/2 Features
+
+```rust
+#[tokio::test]
+async fn test_http2_multiplexing() {
+    let server = TestServerBuilder::new()
+        .with_tls()
+        .with_protocols(&[HttpProtocol::Http2])
+        .build();
+
+    server.on_request("/slow")
+        .delay(Duration::from_millis(100))
+        .respond_with(200, "slow");
+
+    server.on_request("/fast")
+        .respond_with(200, "fast");
+
+    // Multiple concurrent requests over single connection
+    let client = create_http2_client(&server);
+
+    let (slow, fast) = tokio::join!(
+        client.get(server.url("/slow")),
+        client.get(server.url("/fast"))
+    );
+
+    // fast should complete before slow
+}
+```
+
+### HTTP/3 Specific Tests
+
+```rust
+#[tokio::test]
+async fn test_http3() {
+    let server = TestServerBuilder::new()
+        .with_tls()
+        .with_protocols(&[HttpProtocol::Http3])
+        .build();
+
+    server.on_request("/test")
+        .respond_with(200, "OK");
+
+    // Use an HTTP/3 client
+    let client = create_http3_client(&server);
+
+    let response = client.get(server.url("/test")).await.unwrap();
+    assert_eq!(response.status(), 200);
+}
+```
+
+### Protocol Negotiation
+
+```rust
+#[tokio::test]
+async fn test_protocol_negotiation() {
+    let server = TestServerBuilder::new()
+        .with_tls()
+        .build();
+
+    server.on_request_fn("/check", |req| {
+        ResponseBuilder::new()
+            .json(&json!({
+                "protocol": format!("{:?}", req.protocol())
+            }))
+            .build()
+    });
+
+    // HTTP/2 client
+    let h2_client = create_http2_client(&server);
+    let resp = h2_client.get(server.url("/check")).await.unwrap();
+    assert!(resp.text().await.unwrap().contains("Http2"));
+
+    // HTTP/1.1 client
+    let h1_client = create_http1_client(&server);
+    let resp = h1_client.get(server.url("/check")).await.unwrap();
+    assert!(resp.text().await.unwrap().contains("Http1"));
+}
+```
+
+## Protocol Requirements Summary
+
+| Protocol | TLS Required | Transport | Port |
+|----------|--------------|-----------|------|
+| HTTP/1.1 | No | TCP | Any |
+| HTTP/2 | Yes | TCP | Shared |
+| HTTP/3 | Yes | QUIC (UDP) | Shared |
+
+## Complete Example
+
+```rust
+use orb_mockhttp::{TestServerBuilder, HttpProtocol, ResponseBuilder};
+use serde_json::json;
+
+#[tokio::test]
+async fn test_multi_protocol() {
+    // Server supporting all protocols
+    let server = TestServerBuilder::new()
+        .with_tls()
+        .build();
+
+    // Handler that reports which protocol was used
+    server.on_request_fn("/api", |req| {
+        ResponseBuilder::new()
+            .json(&json!({
+                "protocol": match req.protocol() {
+                    HttpProtocol::Http1 => "HTTP/1.1",
+                    HttpProtocol::Http2 => "HTTP/2",
+                    HttpProtocol::Http3 => "HTTP/3",
+                },
+                "method": req.method().as_str(),
+                "path": req.path(),
+            }))
+            .build()
+    });
+
+    // Check protocol support
+    println!("Supported protocols:");
+    for protocol in server.protocols() {
+        println!("  - {:?}", protocol);
+    }
+
+    // Test with different clients...
+}
+```

@@ -1,0 +1,14 @@
+name = "orb-docs"
+compatibility_date = "2026-01-04"
+main = "worker/index.ts"
+route = { pattern = "orb-tools.com", custom_domain = true }
+preview_urls = true
+
+[assets]
+directory = "dist"
+binding = "ASSETS"
+run_worker_first = ["/downloads/*"]
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "orb"

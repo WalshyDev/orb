@@ -1,0 +1,279 @@
+---
+title: Request Object
+description: Accessing request data in route handlers
+sidebar:
+    order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `Request` object is passed to dynamic route handlers, giving you full access to the incoming request.
+
+## Accessing Request Properties
+
+### Method and Path
+
+```rust
+use orb_mockhttp::{TestServerBuilder, ResponseBuilder};
+
+server.on_request_fn("/api", |req| {
+    let method = req.method();  // &http::Method
+    let path = req.path();      // &str
+    let uri = req.uri();        // &http::Uri
+
+    ResponseBuilder::new()
+        .text(format!("{} {}", method, path))
+        .build()
+});
+```
+
+### HTTP Version
+
+```rust
+let version = req.version();  // http::Version (HTTP/1.1, HTTP/2, HTTP/3)
+let protocol = req.protocol();  // HttpProtocol enum
+```
+
+### Query String
+
+```rust
+// Raw query string
+let query: Option<&str> = req.query();  // "page=1&limit=10"
+
+// Parsed parameters
+let params: HashMap<String, String> = req.query_params();
+
+// Get a specific parameter
+let page: Option<&String> = req.query_param("page");
+```
+
+Example:
+
+```rust
+server.on_request_fn("/search", |req| {
+    let query = req.query_param("q").unwrap_or(&"".to_string()).clone();
+    let page = req.query_param("page")
+        .and_then(|p| p.parse::<u32>().ok())
+        .unwrap_or(1);
+
+    ResponseBuilder::new()
+        .json(&json!({
+            "query": query,
+            "page": page,
+            "results": []
+        }))
+        .build()
+});
+```
+
+## Headers
+
+### Get All Headers
+
+```rust
+let headers: &http::HeaderMap = req.headers();
+```
+
+### Get Specific Header
+
+```rust
+let auth: Option<&str> = req.header("Authorization");
+let content_type: Option<&str> = req.content_type();
+let content_length: Option<usize> = req.content_length();
+```
+
+Example:
+
+```rust
+server.on_request_fn("/auth", |req| {
+    match req.header("Authorization") {
+        Some(token) if token.starts_with("Bearer ") => {
+            ResponseBuilder::new()
+                .status(200)
+                .text("Authenticated")
+                .build()
+        }
+        _ => {
+            ResponseBuilder::new()
+                .status(401)
+                .text("Unauthorized")
+                .build()
+        }
+    }
+});
+```
+
+## Request Body
+
+### Raw Bytes
+
+```rust
+let body: &bytes::Bytes = req.body();
+```
+
+### As Text
+
+```rust
+// May fail if not valid UTF-8
+let text: Result<String, _> = req.text();
+
+// Lossy conversion (replaces invalid UTF-8)
+let text: String = req.text_lossy();
+```
+
+### As JSON
+
+```rust
+#[derive(serde::Deserialize)]
+struct CreateUser {
+    name: String,
+    email: String,
+}
+
+server.on_request_fn("/users", |req| {
+    match req.json::<CreateUser>() {
+        Ok(user) => {
+            ResponseBuilder::new()
+                .status(201)
+                .json(&json!({
+                    "id": 1,
+                    "name": user.name,
+                    "email": user.email
+                }))
+                .build()
+        }
+        Err(_) => {
+            ResponseBuilder::new()
+                .status(400)
+                .json(&json!({"error": "Invalid JSON"}))
+                .build()
+        }
+    }
+});
+```
+
+## Method Helpers
+
+### Check Method
+
+```rust
+// Case-insensitive check
+if req.is_method("POST") {
+    // Handle POST
+}
+
+if req.is_method("get") {  // Works too
+    // Handle GET
+}
+```
+
+## Complete Example
+
+```rust
+use orb_mockhttp::{TestServerBuilder, ResponseBuilder};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+
+#[derive(Deserialize)]
+struct CreateItem {
+    name: String,
+    price: f64,
+}
+
+#[derive(Serialize)]
+struct Item {
+    id: u32,
+    name: String,
+    price: f64,
+}
+
+#[tokio::test]
+async fn test_request_handling() {
+    let server = TestServerBuilder::new().build();
+
+    server.on_request_fn("/items", |req| {
+        // Route based on method
+        match req.method().as_str() {
+            "GET" => {
+                // Handle query parameters
+                let limit = req.query_param("limit")
+                    .and_then(|l| l.parse::<usize>().ok())
+                    .unwrap_or(10);
+
+                ResponseBuilder::new()
+                    .status(200)
+                    .json(&json!({
+                        "items": [],
+                        "limit": limit
+                    }))
+                    .build()
+            }
+            "POST" => {
+                // Check content type
+                if req.content_type() != Some("application/json") {
+                    return ResponseBuilder::new()
+                        .status(415)
+                        .text("Content-Type must be application/json")
+                        .build();
+                }
+
+                // Parse JSON body
+                match req.json::<CreateItem>() {
+                    Ok(create) => {
+                        let item = Item {
+                            id: 1,
+                            name: create.name,
+                            price: create.price,
+                        };
+                        ResponseBuilder::new()
+                            .status(201)
+                            .header("Location", "/items/1")
+                            .json(&item)
+                            .build()
+                    }
+                    Err(e) => {
+                        ResponseBuilder::new()
+                            .status(400)
+                            .json(&json!({
+                                "error": "Invalid request body",
+                                "details": e.to_string()
+                            }))
+                            .build()
+                    }
+                }
+            }
+            _ => {
+                ResponseBuilder::new()
+                    .status(405)
+                    .header("Allow", "GET, POST")
+                    .text("Method not allowed")
+                    .build()
+            }
+        }
+    });
+
+    // Run tests...
+}
+```
+
+## Request Summary Table
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `method()` | `&Method` | HTTP method |
+| `uri()` | `&Uri` | Full URI |
+| `path()` | `&str` | Path component |
+| `query()` | `Option<&str>` | Raw query string |
+| `query_params()` | `HashMap<String, String>` | Parsed query parameters |
+| `query_param(key)` | `Option<&String>` | Single query parameter |
+| `version()` | `Version` | HTTP version |
+| `protocol()` | `HttpProtocol` | Protocol enum |
+| `headers()` | `&HeaderMap` | All headers |
+| `header(name)` | `Option<&str>` | Single header |
+| `content_type()` | `Option<&str>` | Content-Type header |
+| `content_length()` | `Option<usize>` | Content-Length header |
+| `body()` | `&Bytes` | Raw body bytes |
+| `text()` | `Result<String, _>` | Body as UTF-8 string |
+| `text_lossy()` | `String` | Body as lossy UTF-8 |
+| `json<T>()` | `Result<T, _>` | Body as JSON |
+| `is_method(m)` | `bool` | Check method (case-insensitive) |
