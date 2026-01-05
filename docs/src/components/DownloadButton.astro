@@ -1,0 +1,94 @@
+---
+interface Props {
+  href: string;
+  platform: 'macos' | 'linux' | 'windows';
+  label?: string;
+}
+
+const { href, platform, label } = Astro.props;
+
+const icons = {
+  macos: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>`,
+  linux: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.401-.182-.786-.492-1.046h-.003c-.059-.054-.123-.067-.188-.135a.357.357 0 00-.19-.064c.431-1.278.264-2.55-.173-3.694-.533-1.41-1.465-2.638-2.175-3.483-.796-1.005-1.576-1.957-1.56-3.368.026-2.152.236-6.133-3.544-6.139zm.529 3.405h.013c.213 0 .396.062.584.198.19.135.33.332.438.533.105.259.158.459.166.724 0-.02.006-.04.006-.06v.105a.086.086 0 01-.004-.021l-.004-.024a1.807 1.807 0 01-.15.706.953.953 0 01-.213.335.71.71 0 00-.088-.042c-.104-.045-.198-.064-.284-.133a1.312 1.312 0 01-.22-.253 1.73 1.73 0 01-.169-.272c-.143-.38-.19-.751-.2-1.03v-.093a.648.648 0 01.127-.465c.08-.088.182-.145.29-.171zm-2.98.456c.212 0 .395.074.562.211.168.137.3.309.393.504.093.195.146.379.158.553.015.174-.012.351-.08.53-.07.18-.159.336-.268.469a1.02 1.02 0 01-.389.291c-.147.063-.315.095-.504.095a1.18 1.18 0 01-.531-.135c-.166-.09-.315-.228-.447-.41a1.755 1.755 0 01-.301-.585 1.574 1.574 0 01-.063-.593c.04-.218.148-.398.324-.541.175-.143.39-.215.646-.215zm4.66 4.461a.857.857 0 01.243.041c.195.058.329.167.421.323.093.15.137.325.137.521 0 .17-.034.348-.103.532a1.727 1.727 0 01-.29.48.879.879 0 01-.426.302c-.172.061-.35.068-.533.023a1.002 1.002 0 01-.456-.283 1.424 1.424 0 01-.296-.465 1.565 1.565 0 01-.106-.55c0-.187.03-.366.095-.536a1.17 1.17 0 01.258-.428.846.846 0 01.385-.243c.083-.03.175-.044.27-.044zm-4.9.158c.1 0 .196.02.286.064a.935.935 0 01.454.538c.053.169.06.353.023.552-.036.19-.103.37-.201.54-.098.168-.213.312-.345.43a.995.995 0 01-.43.221 1.007 1.007 0 01-.485-.026 1.052 1.052 0 01-.42-.268 1.487 1.487 0 01-.288-.45 1.49 1.49 0 01-.115-.558c-.001-.217.063-.416.191-.597.13-.18.3-.315.512-.406.212-.093.448-.14.702-.14z"/></svg>`,
+  windows: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>`
+};
+
+const defaultLabels = {
+  macos: 'Download for macOS',
+  linux: 'Download for Linux',
+  windows: 'Download for Windows'
+};
+---
+
+<a href={href} class="download-button" data-platform={platform} download>
+  <span class="download-button-icon" set:html={icons[platform]} />
+  <span class="download-button-text">{label || defaultLabels[platform]}</span>
+  <span class="download-button-arrow">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  </span>
+</a>
+
+<style>
+  .download-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1.5rem;
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .download-button:hover {
+    background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(249, 115, 22, 0.4);
+    color: white;
+  }
+
+  .download-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+  }
+
+  .download-button-icon {
+    display: flex;
+    align-items: center;
+    opacity: 0.9;
+  }
+
+  .download-button-text {
+    flex: 1;
+  }
+
+  .download-button-arrow {
+    display: flex;
+    align-items: center;
+    opacity: 0.8;
+  }
+
+  /* Outlined variant for secondary downloads */
+  .download-button[data-variant="outline"] {
+    background: transparent;
+    border: 2px solid #f97316;
+    color: #f97316;
+    box-shadow: none;
+  }
+
+  .download-button[data-variant="outline"]:hover {
+    background: rgba(249, 115, 22, 0.1);
+    color: #fb923c;
+    border-color: #fb923c;
+    box-shadow: none;
+  }
+</style>

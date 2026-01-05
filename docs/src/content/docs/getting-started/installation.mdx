@@ -4,32 +4,36 @@ description: How to install orb on your system
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
+import DownloadButtons from '../../../components/DownloadButtons.astro';
 
 ## Pre-built Binaries
 
-Download the latest release for your platform from the [GitHub Releases](https://github.com/WalshyDev/orb/releases) page.
+Download the latest release for your platform:
+
+<DownloadButtons />
+
+### Manual Installation
+
+After downloading, you'll need to make the binary executable and move it to your PATH:
 
 <Tabs>
   <TabItem label="macOS">
     ```bash
-    # Download (works on both Apple Silicon and Intel)
-    curl -L https://orb-tools.com/downloads/orb-macos -o orb
-    chmod +x orb
-    sudo mv orb /usr/local/bin/
+    chmod +x orb-macos
+    sudo mv orb-macos /usr/local/bin/orb
     ```
   </TabItem>
   <TabItem label="Linux">
     ```bash
-    curl -L https://orb-tools.com/downloads/orb-linux -o orb
-    chmod +x orb
-    sudo mv orb /usr/local/bin/
+    chmod +x orb-linux
+    sudo mv orb-linux /usr/local/bin/orb
     ```
   </TabItem>
   <TabItem label="Windows">
     ```powershell
-    # Download using PowerShell
-    Invoke-WebRequest -Uri "https://orb-tools.com/downloads/orb-windows" -OutFile "orb.exe"
-    # Move orb.exe to a directory in your PATH
+    # Rename to orb.exe and move to a directory in your PATH
+    Rename-Item orb-windows.exe orb.exe
+    Move-Item orb.exe C:\Windows\System32\
     ```
   </TabItem>
 </Tabs>
