@@ -7,7 +7,7 @@ description = "Mock HTTP server for testing - supports HTTP/1.1, HTTP/2, and HTT
 license = "MIT"
 repository = "https://github.com/WalshyDev/orb"
 rust-version = "1.91"
-publish = false
+publish = true
 
 [dependencies]
 # HTTP types
