@@ -7,7 +7,7 @@ use orb_mockhttp::{HttpProtocol, ResponseBuilder, TestServerBuilder};
 use std::process::Command;
 use std::time::Duration;
 use test_case::test_case;
-use testutils::{parse_args, sanitize_error, sanitize_output};
+use testutils::{normalize_os_error, null_device, parse_args, sanitize_error, sanitize_output};
 use tokio::io::AsyncReadExt;
 
 use crate::testutils::test_server;
@@ -127,7 +127,7 @@ fn test_headers(headers: Vec<&str>) {
 }
 
 #[test_case("simple data", "simple data"; "simple data")]
-#[test_case("@tests/testdata/test_data.txt", "This is test data from file\n"; "data from file")]
+#[test_case("@tests/testdata/test_data.txt", "This is test data from file"; "data from file")]
 fn test_data(data: &str, expected_body: &str) {
     let server = TestServerBuilder::new().build();
     server.on_request("/test").respond_with(200, "OK");
@@ -168,7 +168,7 @@ fn test_data_invalid(data: &str, expected_error: &str) {
     let output = cmd.output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(stderr, expected_error);
+    assert_eq!(normalize_os_error(&stderr), expected_error);
 }
 
 #[test]
@@ -1447,7 +1447,7 @@ fn test_cacert_invalid(cacert_path: &str, expected_error: &str) {
     let output = cmd.output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(stderr, expected_error);
+    assert_eq!(normalize_os_error(&stderr), expected_error);
 }
 
 // Test --cert with a valid client certificate (cert + key combined)
@@ -1503,7 +1503,7 @@ fn test_cert_invalid(cert_path: &str, expected_error: &str) {
     let output = cmd.output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(stderr, expected_error);
+    assert_eq!(normalize_os_error(&stderr), expected_error);
 }
 
 #[test_case(
@@ -1522,7 +1522,7 @@ fn test_key_invalid(key_path: &str, expected_error: &str) {
     let output = cmd.output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(stderr, expected_error);
+    assert_eq!(normalize_os_error(&stderr), expected_error);
 }
 
 #[test]
@@ -1622,7 +1622,7 @@ fn test_cookie_invalid(cookie_arg: &str, expected_error: &str) {
     let output = cmd.output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(stderr, expected_error);
+    assert_eq!(normalize_os_error(&stderr), expected_error);
 }
 
 #[test]
@@ -1922,7 +1922,7 @@ fn test_progress() {
     cmd.arg(server.url("/download"))
         .arg("--progress")
         .arg("-o")
-        .arg("/dev/null")
+        .arg(null_device())
         // Force progress bar output even when stderr is not a TTY (for testing)
         .env("ORB_FORCE_PROGRESS", "1");
 
@@ -1978,7 +1978,7 @@ fn test_progress_auto_start() {
     let mut cmd = Command::new(cargo_bin!("orb"));
     cmd.arg(server.url("/slow-response"))
         .arg("-o")
-        .arg("/dev/null")
+        .arg(null_device())
         // Force progress bar output even when stderr is not a TTY (for testing)
         .env("ORB_FORCE_PROGRESS", "1");
 
@@ -2002,7 +2002,7 @@ fn test_progress_auto_start() {
     let mut cmd2 = Command::new(cargo_bin!("orb"));
     cmd2.arg(server.url("/large-file"))
         .arg("-o")
-        .arg("/dev/null")
+        .arg(null_device())
         // Force progress bar output even when stderr is not a TTY (for testing)
         .env("ORB_FORCE_PROGRESS", "1");
 

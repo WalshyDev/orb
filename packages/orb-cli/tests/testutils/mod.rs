@@ -48,6 +48,29 @@ pub fn sanitize_error(output: &str) -> String {
     output.to_string()
 }
 
+/// Returns the platform-appropriate null device path.
+/// On Unix: `/dev/null`
+/// On Windows: `NUL`
+pub fn null_device() -> &'static str {
+    if cfg!(windows) { "NUL" } else { "/dev/null" }
+}
+
+/// Normalizes OS error messages for cross-platform testing.
+/// Windows uses different error message text than Unix for the same error codes.
+pub fn normalize_os_error(error: &str) -> String {
+    error
+        // "file not found" errors (os error 2)
+        .replace(
+            "The system cannot find the file specified.",
+            "No such file or directory",
+        )
+        // "path not found" errors (os error 3)
+        .replace(
+            "The system cannot find the path specified.",
+            "No such file or directory",
+        )
+}
+
 /// Parse a shell-style argument string, respecting single and double quotes.
 /// e.g. "-v -H 'Custom-Header: CustomValue'" -> ["-v", "-H", "Custom-Header: CustomValue"]
 pub fn parse_args(input: &str) -> Vec<String> {
