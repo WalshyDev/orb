@@ -97,7 +97,7 @@ impl HttpClientBuilder {
     }
 
     pub fn build(self) -> HttpClient {
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         let tls_config = if self.insecure {
             rustls::ClientConfig::builder()

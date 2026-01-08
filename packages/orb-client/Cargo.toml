@@ -30,16 +30,16 @@ serde_json = { version = "1.0.148" }
 # HTTP/1.1 + HTTP/2
 hyper = { version = "1.6", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
-hyper-rustls = { version = "0.27", features = ["http1", "http2", "native-tokio", "tls12", "ring"] }
+hyper-rustls = { version = "0.27", features = ["http1", "http2", "native-tokio", "tls12", "aws-lc-rs"] }
 tower-service = "0.3"
 
 # HTTP/3 (QUIC)
-quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls", "aws-lc-rs"] }
 h3 = "0.0.8"
 h3-quinn = "0.0.10"
 
 # TLS
-rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
 rustls-native-certs = "0.8"
 tokio-rustls = "0.26"
 webpki-roots = "1.0.5"

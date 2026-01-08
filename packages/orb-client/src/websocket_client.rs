@@ -540,7 +540,7 @@ fn build_tls_config(
     ca_certs: &[CertificateDer<'static>],
     client_cert: Option<&(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)>,
 ) -> Result<rustls::ClientConfig, OrbError> {
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let config = if insecure {
         rustls::ClientConfig::builder()
