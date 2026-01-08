@@ -20,7 +20,7 @@ hyper = { version = "1.6", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["server", "http1", "http2", "tokio"] }
 
 # HTTP/3 (QUIC)
-quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls", "aws-lc-rs"] }
 h3 = "0.0.8"
 h3-quinn = "0.0.10"
 
@@ -28,7 +28,7 @@ h3-quinn = "0.0.10"
 tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["rustls-tls-native-roots"] }
 
 # TLS
-rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
 rcgen = "0.14.6"
 rustls-pemfile = "2.2"
 tokio-rustls = "0.26"

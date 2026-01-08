@@ -73,7 +73,7 @@ jobs:
             echo "|----------|----------|"
             echo "| macOS (Universal) | [orb-macos](https://orb-tools.com/downloads/orb-macos) |"
             echo "| Linux (x64) | [orb-linux](https://orb-tools.com/downloads/orb-linux) |"
-            echo "| Windows (x64) | [orb-windows](https://orb-tools.com/downloads/orb-windows) |"
+            echo "| Windows (x64) | [orb-windows.exe](https://orb-tools.com/downloads/orb-windows.exe) |"
             echo ""
             echo "Or download with orb/curl:"
             echo ""
@@ -123,22 +123,27 @@ jobs:
             target: x86_64-unknown-linux-gnu
             asset_name: orb-linux-x86_64
             simple_name: orb-linux
+            ext: ""
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             asset_name: orb-linux-x86_64-musl
             simple_name: ""
+            ext: ""
           - os: macos-latest
             target: x86_64-apple-darwin
             asset_name: orb-macos-x86_64
             simple_name: ""
+            ext: ""
           - os: macos-latest
             target: aarch64-apple-darwin
             asset_name: orb-macos-aarch64
             simple_name: orb-macos
+            ext: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             asset_name: orb-windows-x86_64.exe
             simple_name: orb-windows
+            ext: .exe
 
     steps:
       - uses: actions/checkout@v4
@@ -191,8 +196,8 @@ jobs:
         if: matrix.simple_name != ''
         run: |
           mkdir -p r2-artifacts
-          cp artifacts/${{ matrix.asset_name }} r2-artifacts/${{ matrix.simple_name }}
-          cp artifacts/${{ matrix.asset_name }} r2-artifacts/${{ matrix.simple_name }}-${{ needs.create-release.outputs.version }}
+          cp artifacts/${{ matrix.asset_name }} r2-artifacts/${{ matrix.simple_name }}${{ matrix.ext }}
+          cp artifacts/${{ matrix.asset_name }} r2-artifacts/${{ matrix.simple_name }}-${{ needs.create-release.outputs.version }}${{ matrix.ext }}
 
       - name: Upload to R2
         if: matrix.simple_name != ''

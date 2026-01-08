@@ -45,7 +45,7 @@ impl TestServer {
         protocols: HashSet<HttpProtocol>,
     ) -> Self {
         // Install crypto provider
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         let state = Arc::new(ServerState::new());
         let (shutdown_tx, shutdown_rx) = watch::channel(false);

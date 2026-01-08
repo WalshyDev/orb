@@ -8,27 +8,23 @@ interface Props {
 
 const {
   version = 'latest',
-  baseUrl = 'https://github.com/WalshyDev/orb/releases'
+  baseUrl = 'https://orb-tools.com/downloads'
 } = Astro.props;
-
-const downloadUrl = version === 'latest'
-  ? `${baseUrl}/latest/download`
-  : `${baseUrl}/download/${version}`;
 ---
 
 <div class="download-buttons">
   <DownloadButton
-    href={`${downloadUrl}/orb-macos`}
+    href={`${baseUrl}/orb-macos`}
     platform="macos"
     label="macOS (Universal)"
   />
   <DownloadButton
-    href={`${downloadUrl}/orb-linux`}
+    href={`${baseUrl}/orb-linux`}
     platform="linux"
     label="Linux (x86_64)"
   />
   <DownloadButton
-    href={`${downloadUrl}/orb-windows.exe`}
+    href={`${baseUrl}/orb-windows.exe`}
     platform="windows"
     label="Windows (x86_64)"
   />

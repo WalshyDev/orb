@@ -1,9 +1,7 @@
-name: Deploy Docs
+name: Build Docs
 
 on:
   push:
-    branches:
-      - main
     paths:
       - 'docs/**'
       - '.github/workflows/docs.yml'
@@ -14,8 +12,8 @@ defaults:
     working-directory: docs
 
 jobs:
-  deploy:
-    name: Deploy Documentation
+  build:
+    name: Build Documentation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +33,7 @@ jobs:
 
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
+        if: github.ref == 'refs/heads/main'
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
