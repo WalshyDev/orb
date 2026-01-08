@@ -54,6 +54,7 @@ jobs:
         run: make release
 
       - name: Test
+        timeout-minutes: 2
         run: make test
 
   lint:
