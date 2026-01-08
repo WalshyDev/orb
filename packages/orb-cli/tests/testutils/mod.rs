@@ -30,6 +30,9 @@ pub fn sanitize_output(output: &str) -> String {
     let output = re_tls_valid_from.replace_all(&output, "*     Valid from: <DATE>");
     let output = re_tls_valid_until.replace_all(&output, "*     Valid until: <DATE>");
 
+    // Replace orb/<version> with a preset version
+    let output = output.replace(&format!("orb/{}", env!("CARGO_PKG_VERSION")), "orb/0.1.0");
+
     if !boundary.is_empty() {
         // Replace all occurrences of the boundary in the body (--boundary and --boundary--)
         let re_boundary_body = Regex::new(&format!(r"--{}", regex::escape(boundary))).unwrap();
