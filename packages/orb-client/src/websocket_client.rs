@@ -27,6 +27,7 @@ pub struct WebSocketConfig {
     pub connect_timeout: Option<Duration>,
     pub max_time: Option<Duration>,
     pub insecure: bool,
+    pub use_system_cert_store: bool,
     pub dns_overrides: Vec<OverrideRule>,
     pub event_handler: Option<BoxedEventHandler>,
     pub ca_certs: Vec<CertificateDer<'static>>,
@@ -41,6 +42,7 @@ impl WebSocketConfig {
             connect_timeout: None,
             max_time: None,
             insecure: false,
+            use_system_cert_store: false,
             dns_overrides: Vec::new(),
             event_handler: None,
             ca_certs: Vec::new(),
@@ -61,6 +63,12 @@ impl WebSocketConfig {
 
     pub fn insecure(mut self, insecure: bool) -> Self {
         self.insecure = insecure;
+        self
+    }
+
+    /// Use the system's native certificate store instead of the bundled webpki-roots
+    pub fn use_system_cert_store(mut self, use_system: bool) -> Self {
+        self.use_system_cert_store = use_system;
         self
     }
 
@@ -434,6 +442,7 @@ pub async fn connect(config: WebSocketConfig) -> Result<WebSocketStream, OrbErro
         // Build TLS config
         let tls_config = build_tls_config(
             config.insecure,
+            config.use_system_cert_store,
             &config.ca_certs,
             config.client_cert.as_ref(),
         )?;
@@ -527,6 +536,7 @@ fn resolve_address(host: &str, port: u16) -> Result<SocketAddr, OrbError> {
 
 fn build_tls_config(
     insecure: bool,
+    use_system_cert_store: bool,
     ca_certs: &[CertificateDer<'static>],
     client_cert: Option<&(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)>,
 ) -> Result<rustls::ClientConfig, OrbError> {
@@ -539,7 +549,17 @@ fn build_tls_config(
             .with_no_client_auth()
     } else {
         let mut root_store = rustls::RootCertStore::empty();
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+        if use_system_cert_store {
+            // Load certificates from the system's native certificate store
+            let native_certs = rustls_native_certs::load_native_certs();
+            for cert in native_certs.certs {
+                root_store.add(cert).ok();
+            }
+        } else {
+            // Use bundled webpki-roots (Mozilla's root certificates)
+            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        }
 
         // Add custom CA certificates if provided
         for cert in ca_certs {

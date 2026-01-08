@@ -1364,6 +1364,7 @@ dependencies = [
  "pin-project",
  "quinn",
  "rustls",
+ "rustls-native-certs",
  "serde_json",
  "tokio",
  "tokio-rustls",
