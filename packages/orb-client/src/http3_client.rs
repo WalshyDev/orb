@@ -39,6 +39,7 @@ pub async fn send_http3_request(builder: RequestBuilder) -> Result<Response, Orb
     // Build TLS config for QUIC
     let tls_config = build_tls_config(
         builder.insecure,
+        builder.use_system_cert_store,
         &builder.ca_certs,
         builder.client_cert.as_ref(),
     )?;
@@ -277,10 +278,11 @@ fn resolve_address(host: &str, port: u16) -> Result<SocketAddr, OrbError> {
 
 fn build_tls_config(
     insecure: bool,
+    use_system_cert_store: bool,
     ca_certs: &[CertificateDer<'static>],
     client_cert: Option<&(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)>,
 ) -> Result<rustls::ClientConfig, OrbError> {
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let mut config = if insecure {
         rustls::ClientConfig::builder()
@@ -289,7 +291,17 @@ fn build_tls_config(
             .with_no_client_auth()
     } else {
         let mut root_store = rustls::RootCertStore::empty();
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+        if use_system_cert_store {
+            // Load certificates from the system's native certificate store
+            let native_certs = rustls_native_certs::load_native_certs();
+            for cert in native_certs.certs {
+                root_store.add(cert).ok();
+            }
+        } else {
+            // Use bundled webpki-roots (Mozilla's root certificates)
+            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        }
 
         // Add custom CA certificates if provided
         for cert in ca_certs {

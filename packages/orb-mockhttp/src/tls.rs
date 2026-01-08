@@ -115,7 +115,7 @@ impl TlsConfig {
     #[allow(dead_code)]
     pub(crate) fn build_rustls_server_config(&self) -> Arc<rustls::ServerConfig> {
         // Install crypto provider if not already installed
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         let config = rustls::ServerConfig::builder()
             .with_no_client_auth()
@@ -135,7 +135,7 @@ impl TlsConfig {
         http2: bool,
     ) -> Arc<rustls::ServerConfig> {
         // Install crypto provider if not already installed
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         let mut config = rustls::ServerConfig::builder()
             .with_no_client_auth()
@@ -165,7 +165,7 @@ impl TlsConfig {
     /// Build a Quinn ServerConfig for HTTP/3
     pub(crate) fn build_quic_server_config(&self) -> quinn::ServerConfig {
         // Install crypto provider if not already installed
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         let mut server_crypto = rustls::ServerConfig::builder()
             .with_no_client_auth()

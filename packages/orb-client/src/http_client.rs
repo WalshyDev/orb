@@ -34,6 +34,7 @@ type HyperClient = Client<TlsCapturingConnector, BoxBody>;
 pub struct HttpClientBuilder {
     connect_timeout: Option<Duration>,
     insecure: bool,
+    use_system_cert_store: bool,
     overrides: Vec<OverrideRule>,
     event_handler: Option<BoxedEventHandler>,
     ca_certs: Vec<CertificateDer<'static>>,
@@ -52,6 +53,12 @@ impl HttpClientBuilder {
 
     pub fn insecure(mut self, insecure: bool) -> Self {
         self.insecure = insecure;
+        self
+    }
+
+    /// Use the system's native certificate store instead of the bundled webpki-roots
+    pub fn use_system_cert_store(mut self, use_system: bool) -> Self {
+        self.use_system_cert_store = use_system;
         self
     }
 
@@ -90,7 +97,7 @@ impl HttpClientBuilder {
     }
 
     pub fn build(self) -> HttpClient {
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         let tls_config = if self.insecure {
             rustls::ClientConfig::builder()
@@ -99,7 +106,17 @@ impl HttpClientBuilder {
                 .with_no_client_auth()
         } else {
             let mut root_store = rustls::RootCertStore::empty();
-            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+            if self.use_system_cert_store {
+                // Load certificates from the system's native certificate store
+                let native_certs = rustls_native_certs::load_native_certs();
+                for cert in native_certs.certs {
+                    root_store.add(cert).ok();
+                }
+            } else {
+                // Use bundled webpki-roots (Mozilla's root certificates)
+                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            }
 
             // Add custom CA certificates if provided
             for cert in &self.ca_certs {
@@ -370,6 +387,7 @@ pub struct RequestBuilder {
     pub(crate) connect_timeout: Option<Duration>,
     pub(crate) max_time: Option<Duration>,
     pub(crate) insecure: bool,
+    pub(crate) use_system_cert_store: bool,
     pub(crate) dns_overrides: Vec<OverrideRule>,
     pub(crate) event_handler: Option<BoxedEventHandler>,
     pub(crate) ca_certs: Vec<CertificateDer<'static>>,
@@ -389,6 +407,7 @@ impl RequestBuilder {
             connect_timeout: None,
             max_time: None,
             insecure: false,
+            use_system_cert_store: false,
             dns_overrides: Vec::new(),
             event_handler: None,
             ca_certs: Vec::new(),
@@ -453,6 +472,12 @@ impl RequestBuilder {
 
     pub fn insecure(mut self, insecure: bool) -> Self {
         self.insecure = insecure;
+        self
+    }
+
+    /// Use the system's native certificate store instead of the bundled webpki-roots
+    pub fn use_system_cert_store(mut self, use_system: bool) -> Self {
+        self.use_system_cert_store = use_system;
         self
     }
 
@@ -539,6 +564,7 @@ impl RequestBuilder {
             config = config.max_time(max_time);
         }
         config = config.insecure(self.insecure);
+        config = config.use_system_cert_store(self.use_system_cert_store);
         config = config.dns_overrides(self.dns_overrides);
 
         if let Some(handler) = self.event_handler {
@@ -561,6 +587,7 @@ impl RequestBuilder {
     async fn send_http1_2(mut self) -> Result<Response, OrbError> {
         let connect_timeout = self.connect_timeout.unwrap_or(Duration::from_secs(30));
         let insecure = self.insecure;
+        let use_system_cert_store = self.use_system_cert_store;
         let max_time = self.max_time;
 
         // Clone event handler for the connector, keep original for request events
@@ -572,6 +599,7 @@ impl RequestBuilder {
         let mut builder = HttpClient::builder()
             .connect_timeout(connect_timeout)
             .insecure(insecure)
+            .use_system_cert_store(use_system_cert_store)
             .dns_overrides(dns_overrides)
             .ca_certs(ca_certs);
 

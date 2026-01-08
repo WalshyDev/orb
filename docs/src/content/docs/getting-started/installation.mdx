@@ -12,27 +12,30 @@ Download the latest release for your platform:
 
 <DownloadButtons />
 
-### Manual Installation
+After downloading, move the binary to a directory in your PATH, such as `/usr/local/bin` on macOS/Linux.
+
+## Command line Installation
 
 After downloading, you'll need to make the binary executable and move it to your PATH:
 
 <Tabs>
   <TabItem label="macOS">
     ```bash
-    chmod +x orb-macos
-    sudo mv orb-macos /usr/local/bin/orb
+    curl https://orb-tools.com/downloads/orb-macos -v -o orb
+    chmod +x orb
+    sudo mv orb /usr/local/bin/orb
     ```
   </TabItem>
   <TabItem label="Linux">
     ```bash
-    chmod +x orb-linux
-    sudo mv orb-linux /usr/local/bin/orb
+    curl https://orb-tools.com/downloads/orb-linux -v -o orb
+    chmod +x orb
+    sudo mv orb /usr/local/bin/orb
     ```
   </TabItem>
   <TabItem label="Windows">
     ```powershell
-    # Rename to orb.exe and move to a directory in your PATH
-    Rename-Item orb-windows.exe orb.exe
+    Invoke-WebRequest -Uri https://orb-tools.com/downloads/orb-windows.exe -OutFile orb.exe
     Move-Item orb.exe C:\Windows\System32\
     ```
   </TabItem>

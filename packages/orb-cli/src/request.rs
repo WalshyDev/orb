@@ -23,6 +23,7 @@ pub async fn build_request(builder: RequestBuilder, args: &Args, url: &Url) -> R
         .max_redirects(args.max_redirects)
         .connect_timeout(Duration::from_secs(args.connect_timeout))
         .insecure(args.insecure)
+        .use_system_cert_store(true)
         .dns_overrides(parse_connect_to_rules(&args.connect_to));
 
     // Add event handler for verbose mode (silent suppresses verbose)
