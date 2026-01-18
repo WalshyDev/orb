@@ -34,7 +34,7 @@ pub struct TestServer {
     /// Shutdown signal sender
     shutdown_tx: watch::Sender<bool>,
     /// Background thread handle
-    _thread_handle: Option<JoinHandle<()>>,
+    thread_handle: Option<JoinHandle<()>>,
 }
 
 impl TestServer {
@@ -88,7 +88,7 @@ impl TestServer {
             protocols,
             state,
             shutdown_tx,
-            _thread_handle: Some(thread_handle),
+            thread_handle: Some(thread_handle),
         }
     }
 
@@ -201,6 +201,10 @@ impl TestServer {
 impl Drop for TestServer {
     fn drop(&mut self) {
         self.shutdown();
+        // Wait for the server thread to finish
+        if let Some(handle) = self.thread_handle.take() {
+            let _ = handle.join();
+        }
     }
 }
 
@@ -304,7 +308,7 @@ pub struct WebSocketServer {
     /// Shutdown signal sender
     shutdown_tx: watch::Sender<bool>,
     /// Background thread handle
-    _thread_handle: Option<JoinHandle<()>>,
+    thread_handle: Option<JoinHandle<()>>,
 }
 
 impl WebSocketServer {
@@ -366,7 +370,7 @@ impl WebSocketServer {
             tls_config,
             state,
             shutdown_tx,
-            _thread_handle: Some(thread_handle),
+            thread_handle: Some(thread_handle),
         }
     }
 
@@ -427,6 +431,10 @@ impl WebSocketServer {
 impl Drop for WebSocketServer {
     fn drop(&mut self) {
         self.shutdown();
+        // Wait for the server thread to finish
+        if let Some(handle) = self.thread_handle.take() {
+            let _ = handle.join();
+        }
     }
 }
 
