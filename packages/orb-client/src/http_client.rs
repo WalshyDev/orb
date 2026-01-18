@@ -1,4 +1,3 @@
-use std::error::Error as StdError;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -318,7 +317,6 @@ impl HttpClient {
 
     fn handle_error(error: hyper_util::client::legacy::Error) -> OrbError {
         let err_str = format!("{:?}", error);
-        println!("{}", err_str);
 
         if err_str.contains("InvalidCertificate") {
             if err_str.contains("ExpiredContext") {
@@ -338,12 +336,7 @@ impl HttpClient {
             };
         }
 
-        if let Some(source) = error.source() {
-            dbg!(source);
-        }
-
-        dbg!("handle_error: {:?}", error);
-        OrbError::Request("debug me".to_owned())
+        OrbError::Request(format!("{}", error))
     }
 
     fn resolve_redirect_uri(current: &http::Uri, location: &str) -> Result<http::Uri, OrbError> {
