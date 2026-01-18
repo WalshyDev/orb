@@ -10,6 +10,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
+use tokio::task::JoinSet;
 use tokio_rustls::TlsAcceptor;
 
 use crate::HttpProtocol;
@@ -24,6 +25,7 @@ pub async fn run_http2_server(
     mut shutdown: watch::Receiver<bool>,
 ) {
     let acceptor = TlsAcceptor::from(tls_config);
+    let mut connection_tasks: JoinSet<()> = JoinSet::new();
 
     loop {
         tokio::select! {
@@ -31,6 +33,8 @@ pub async fn run_http2_server(
 
             _ = shutdown.changed() => {
                 if *shutdown.borrow() {
+                    // Abort all connection tasks on shutdown
+                    connection_tasks.abort_all();
                     break;
                 }
             }
@@ -40,7 +44,7 @@ pub async fn run_http2_server(
                     Ok((stream, _addr)) => {
                         let acceptor = acceptor.clone();
                         let state = Arc::clone(&state);
-                        tokio::spawn(async move {
+                        connection_tasks.spawn(async move {
                             match acceptor.accept(stream).await {
                                 Ok(tls_stream) => {
                                     // Check negotiated protocol

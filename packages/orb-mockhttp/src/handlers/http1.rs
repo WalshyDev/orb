@@ -9,6 +9,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
+use tokio::task::JoinSet;
 
 use crate::HttpProtocol;
 use crate::handlers::{BoxBody, ServerState, build_hyper_response};
@@ -20,12 +21,16 @@ pub async fn run_http1_server(
     state: Arc<ServerState>,
     mut shutdown: watch::Receiver<bool>,
 ) {
+    let mut connection_tasks: JoinSet<()> = JoinSet::new();
+
     loop {
         tokio::select! {
             biased;
 
             _ = shutdown.changed() => {
                 if *shutdown.borrow() {
+                    // Abort all connection tasks on shutdown
+                    connection_tasks.abort_all();
                     break;
                 }
             }
@@ -34,7 +39,7 @@ pub async fn run_http1_server(
                 match accept_result {
                     Ok((stream, _addr)) => {
                         let state = Arc::clone(&state);
-                        tokio::spawn(async move {
+                        connection_tasks.spawn(async move {
                             let io = TokioIo::new(stream);
                             let service = service_fn(|req| {
                                 handle_request(req, Arc::clone(&state))

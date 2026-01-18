@@ -7,6 +7,7 @@ use http::Version;
 use quinn::Endpoint;
 use std::sync::Arc;
 use tokio::sync::watch;
+use tokio::task::JoinSet;
 
 use crate::HttpProtocol;
 use crate::handlers::ServerState;
@@ -19,12 +20,18 @@ pub async fn run_http3_server(
     state: Arc<ServerState>,
     mut shutdown: watch::Receiver<bool>,
 ) {
+    let mut connection_tasks: JoinSet<()> = JoinSet::new();
+
     loop {
         tokio::select! {
             biased;
 
             _ = shutdown.changed() => {
                 if *shutdown.borrow() {
+                    // Abort all connection tasks on shutdown
+                    connection_tasks.abort_all();
+                    // Close the QUIC endpoint to stop accepting new connections
+                    endpoint.close(0u32.into(), b"shutdown");
                     break;
                 }
             }
@@ -33,7 +40,7 @@ pub async fn run_http3_server(
                 match incoming {
                     Some(conn) => {
                         let state = Arc::clone(&state);
-                        tokio::spawn(async move {
+                        connection_tasks.spawn(async move {
                             if let Err(e) = handle_connection(conn, state).await {
                                 eprintln!("HTTP/3 connection error: {}", e);
                             }
@@ -63,18 +70,17 @@ async fn handle_connection(
         match h3_conn.accept().await {
             Ok(Some(resolver)) => {
                 let state = Arc::clone(&state);
-                tokio::spawn(async move {
-                    match resolver.resolve_request().await {
-                        Ok((request, stream)) => {
-                            if let Err(e) = handle_request(request, stream, state).await {
-                                eprintln!("HTTP/3 request error: {}", e);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("HTTP/3 resolve error: {}", e);
+                // Handle request inline instead of spawning to avoid nested task tracking issues
+                match resolver.resolve_request().await {
+                    Ok((request, stream)) => {
+                        if let Err(e) = handle_request(request, stream, state).await {
+                            eprintln!("HTTP/3 request error: {}", e);
                         }
                     }
-                });
+                    Err(e) => {
+                        eprintln!("HTTP/3 resolve error: {}", e);
+                    }
+                }
             }
             Ok(None) => {
                 // Connection closed

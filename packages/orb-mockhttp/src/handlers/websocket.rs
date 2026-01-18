@@ -5,6 +5,7 @@ use std::sync::Arc;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
+use tokio::task::JoinSet;
 use tokio_tungstenite::tungstenite::Message;
 
 use super::{ReceivedWebSocketMessage, WebSocketState};
@@ -15,12 +16,16 @@ pub async fn run_websocket_server(
     state: Arc<WebSocketState>,
     mut shutdown_rx: watch::Receiver<bool>,
 ) {
+    let mut connection_tasks: JoinSet<()> = JoinSet::new();
+
     loop {
         tokio::select! {
             biased;
 
             _ = shutdown_rx.changed() => {
                 if *shutdown_rx.borrow() {
+                    // Abort all connection tasks on shutdown
+                    connection_tasks.abort_all();
                     break;
                 }
             }
@@ -29,7 +34,7 @@ pub async fn run_websocket_server(
                 match accept_result {
                     Ok((stream, _addr)) => {
                         let state = Arc::clone(&state);
-                        tokio::spawn(async move {
+                        connection_tasks.spawn(async move {
                             if let Ok(ws_stream) = tokio_tungstenite::accept_async(stream).await {
                                 handle_websocket_connection(ws_stream, state).await;
                             }
@@ -49,12 +54,16 @@ pub async fn run_websocket_tls_server(
     state: Arc<WebSocketState>,
     mut shutdown_rx: watch::Receiver<bool>,
 ) {
+    let mut connection_tasks: JoinSet<()> = JoinSet::new();
+
     loop {
         tokio::select! {
             biased;
 
             _ = shutdown_rx.changed() => {
                 if *shutdown_rx.borrow() {
+                    // Abort all connection tasks on shutdown
+                    connection_tasks.abort_all();
                     break;
                 }
             }
@@ -64,7 +73,7 @@ pub async fn run_websocket_tls_server(
                     Ok((stream, _addr)) => {
                         let tls_acceptor = tls_acceptor.clone();
                         let state = Arc::clone(&state);
-                        tokio::spawn(async move {
+                        connection_tasks.spawn(async move {
                             // Perform TLS handshake
                             if let Ok(tls_stream) = tls_acceptor.accept(stream).await {
                                 // Upgrade to WebSocket
