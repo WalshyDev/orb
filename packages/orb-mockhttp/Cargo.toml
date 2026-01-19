@@ -29,7 +29,7 @@ tokio-tungstenite = { version = "0.28.0", default-features = false, features = [
 
 # TLS
 rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
-rcgen = "0.14.6"
+rcgen = "0.14.7"
 rustls-pemfile = "2.2"
 tokio-rustls = "0.26"
 

@@ -68,7 +68,7 @@ predicates = "3.1"
 test-case = "3.3.1"
 insta = "1.46.0"
 regex = "1.12.2"
-rcgen = "0.14.6"  # For HTTP/3 test certificate generation
+rcgen = "0.14.7"  # For HTTP/3 test certificate generation
 tempfile = "3.15"  # For temporary cert files in tests
 orb-mockhttp = { path = "../orb-mockhttp" }
 
