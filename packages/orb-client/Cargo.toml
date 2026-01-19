@@ -16,7 +16,7 @@ futures-util = "0.3"
 pin-project = "1.1"
 
 # URL parsing
-url = "2.5.7"
+url = "2.5.8"
 
 # Core HTTP types
 http = "1.2"
