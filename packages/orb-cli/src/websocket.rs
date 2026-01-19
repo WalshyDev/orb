@@ -243,6 +243,7 @@ async fn handle_interactive_mode(mut stream: WebSocketStream, args: &Args) {
 async fn handle_tty_interactive_mode(mut stream: WebSocketStream, args: &Args) {
     use rustyline::DefaultEditor;
     use rustyline::error::ReadlineError;
+    use std::io::BufRead;
     use std::thread;
 
     // ANSI color codes
@@ -265,26 +266,52 @@ async fn handle_tty_interactive_mode(mut stream: WebSocketStream, args: &Args) {
     // Channel for stdin -> async task
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
-    // Spawn a thread for rustyline (it's synchronous)
+    // Spawn a thread for stdin reading
+    // Try to use rustyline for nice line editing, fall back to basic stdin if it fails
     let stdin_handle = thread::spawn(move || {
-        let mut rl = DefaultEditor::new().expect("Failed to create editor");
-        loop {
-            match rl.readline(&format!("{}> {}", GREEN, RESET)) {
-                Ok(line) => {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    let _ = rl.add_history_entry(&line);
-                    if tx.send(line).is_err() {
-                        break;
+        match DefaultEditor::new() {
+            Ok(mut rl) => {
+                // Use rustyline for line editing with history
+                loop {
+                    match rl.readline(&format!("{}> {}", GREEN, RESET)) {
+                        Ok(line) => {
+                            if line.trim().is_empty() {
+                                continue;
+                            }
+                            let _ = rl.add_history_entry(&line);
+                            if tx.send(line).is_err() {
+                                break;
+                            }
+                        }
+                        Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
+                            // Ctrl+C or Ctrl+D - exit
+                            break;
+                        }
+                        Err(_) => {
+                            break;
+                        }
                     }
                 }
-                Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
-                    // Ctrl+C or Ctrl+D - exit
-                    break;
-                }
-                Err(_) => {
-                    break;
+            }
+            Err(_) => {
+                // Fall back to basic stdin reading
+                eprintln!(
+                    "{}Warning: Line editing unavailable, using basic input{}",
+                    YELLOW, RESET
+                );
+                let stdin = std::io::stdin();
+                for line in stdin.lock().lines() {
+                    match line {
+                        Ok(line) => {
+                            if line.trim().is_empty() {
+                                continue;
+                            }
+                            if tx.send(line).is_err() {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
                 }
             }
         }

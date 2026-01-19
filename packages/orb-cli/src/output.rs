@@ -103,7 +103,9 @@ pub async fn handle_response(
 
     // Store cookies if cookie jar is specified
     if let Some(ref cookie_jar_path) = args.cookie_jar {
-        let uri: http::Uri = url.as_str().parse().expect("Invalid URL");
+        let uri: http::Uri = url.as_str().parse().unwrap_or_else(|err| {
+            crate::fatal!("Invalid URL '{}': {}", url, err);
+        });
         let cookie_jar = CookieJar::new(Some(cookie_jar_path.clone()));
         cookie_jar.store_response_cookies(response.headers(), &uri);
         // cookie_jar will save to file when dropped
