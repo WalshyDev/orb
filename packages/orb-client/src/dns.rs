@@ -3,13 +3,14 @@ use hyper_util::client::legacy::connect::{
     dns::{GaiResolver, Name},
 };
 use std::future::Future;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tower_service::Service;
 
+use crate::error::OrbError;
 use crate::events::{BoxedEventHandler, ClientEvent, noop_handler};
 
 /// Represents a override rule
@@ -249,6 +250,42 @@ impl Service<http::Uri> for OrbConnector {
         let rewritten = self.rewrite_uri(uri);
         self.inner.call(rewritten)
     }
+}
+
+/// Apply DNS override rules to determine the actual host and port to connect to.
+///
+/// Returns the target (host, port) tuple, which may be overridden from the original
+/// if a matching rule is found.
+pub fn apply_dns_overrides(
+    host: &str,
+    port: u16,
+    overrides: &[OverrideRule],
+    event_handler: &Option<BoxedEventHandler>,
+) -> (String, u16) {
+    for rule in overrides {
+        if rule.matches(host, port) {
+            if let Some(handler) = event_handler {
+                handler.on_event(ClientEvent::ConnectToOverride {
+                    from_host: host.to_string(),
+                    from_port: port,
+                    to_host: rule.to_host.clone(),
+                    to_port: rule.to_port,
+                });
+            }
+            return (rule.to_host.clone(), rule.to_port);
+        }
+    }
+    (host.to_string(), port)
+}
+
+/// Resolve a hostname and port to a socket address.
+pub fn resolve_address(host: &str, port: u16) -> Result<SocketAddr, OrbError> {
+    let addr_str = format!("{}:{}", host, port);
+    addr_str
+        .to_socket_addrs()
+        .map_err(|e| OrbError::Dns(e.to_string()))?
+        .next()
+        .ok_or_else(|| OrbError::Dns(format!("No addresses found for {}", host)))
 }
 
 #[cfg(test)]
