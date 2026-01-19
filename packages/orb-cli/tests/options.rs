@@ -1279,13 +1279,21 @@ fn test_http1_1() {
     server.assert_requests(1);
 }
 
-// Uses my test domain that supports HTTP/2
 #[test]
 fn test_http2() {
-    let mut cmd = Command::new(cargo_bin!("orb"));
-    cmd.arg("https://test.walshy.dev/").arg("--http2").arg("-I");
+    let server = TestServerBuilder::new()
+        .with_protocols(&[HttpProtocol::Http2])
+        .build();
+    server.on_request("/").respond_with(200, "Hello, World!");
 
-    let output = cmd.output().unwrap();
+    let output = Command::new(cargo_bin!("orb"))
+        .arg(server.url("/"))
+        .arg("--http2")
+        .arg("-I")
+        .arg("--insecure")
+        .output()
+        .unwrap();
+
     assert!(
         output.status.success(),
         "Command failed: {}",
@@ -1298,11 +1306,12 @@ fn test_http2() {
         "Expected HTTP/2 in response, got: {}",
         stdout
     );
+
+    server.assert_requests(1);
 }
 
-// HTTP/3 tests using local test server
 #[test]
-fn test_http3_local_server() {
+fn test_http3() {
     let server = TestServerBuilder::new()
         .with_protocols(&[HttpProtocol::Http3])
         .build();
