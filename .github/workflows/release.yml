@@ -18,101 +18,35 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ steps.get_version.outputs.version }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Get version
-        id: get_version
+        id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
-      - name: Generate changelog
-        id: changelog
-        run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
-          if [ -z "$PREVIOUS_TAG" ]; then
-            git log --pretty=format:"- %s (%h)" --no-merges > changelog.txt
-          else
-            git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges > changelog.txt
-          fi
+      - name: Install dependencies
+        working-directory: scripts
+        run: npm install
 
-          # Use random delimiter to avoid conflicts with changelog content
-          DELIM="CHANGELOG_$(openssl rand -hex 8)"
-          {
-            echo "changelog<<${DELIM}"
-            cat changelog.txt
-            echo ""  # Ensure newline after changelog content
-            echo "${DELIM}"
-          } >> $GITHUB_OUTPUT
-
-          echo "previous_tag=${PREVIOUS_TAG}" >> $GITHUB_OUTPUT
-
-      - name: Generate release body
-        id: release_body
-        run: |
-          PREVIOUS_TAG="${{ steps.changelog.outputs.previous_tag }}"
-          VERSION="${{ steps.get_version.outputs.version }}"
-
-          # Use random delimiter to avoid conflicts with body content
-          DELIM="BODY_$(openssl rand -hex 8)"
-          {
-            echo "body<<${DELIM}"
-            echo "## What's Changed"
-            echo ""
-            cat changelog.txt
-            echo ""
-            echo "## Installation"
-            echo ""
-            echo "### Quick Download"
-            echo ""
-            echo "| Platform | Download |"
-            echo "|----------|----------|"
-            echo "| macOS (Universal) | [orb-macos](https://orb-tools.com/downloads/orb-macos) |"
-            echo "| Linux (x64) | [orb-linux](https://orb-tools.com/downloads/orb-linux) |"
-            echo "| Windows (x64) | [orb-windows.exe](https://orb-tools.com/downloads/orb-windows.exe) |"
-            echo ""
-            echo "Or download with orb/curl:"
-            echo ""
-            echo "### Install with orb/curl"
-            echo ""
-            echo "\`\`\`bash"
-            echo "# macOS"
-            echo "orb -L https://orb-tools.com/downloads/orb-macos -o orb && chmod +x orb"
-            echo "curl -L https://orb-tools.com/downloads/orb-macos -o orb && chmod +x orb"
-            echo ""
-            echo "# Linux"
-            echo "orb -L https://orb-tools.com/downloads/orb-linux -o orb && chmod +x orb"
-            echo "curl -L https://orb-tools.com/downloads/orb-linux -o orb && chmod +x orb"
-            echo "\`\`\`"
-            echo ""
-            echo "📚 **[Full Documentation](https://orb-tools.com)**"
-            echo ""
-            if [ -n "$PREVIOUS_TAG" ]; then
-              echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ github.ref_name }}"
-            else
-              echo "**Commits**: https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}"
-            fi
-            echo "${DELIM}"
-          } >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Create release
+        working-directory: scripts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: orb ${{ github.ref_name }}
-          body: ${{ steps.release_body.outputs.body }}
-          draft: false
-          prerelease: false
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: npx tsx release.ts create-release ${{ github.ref_name }}
 
+  # Build binaries for each platform
   build:
-    name: Build Release
+    name: Build ${{ matrix.target }}
     needs: create-release
     runs-on: ${{ matrix.os }}
     strategy:
@@ -120,30 +54,17 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            asset_name: orb-linux-x86_64
-            simple_name: orb-linux
-            ext: ""
-          - os: ubuntu-latest
+            build: make build-linux
             target: x86_64-unknown-linux-musl
-            asset_name: orb-linux-x86_64-musl
-            simple_name: ""
-            ext: ""
+            asset_name: orb-linux
           - os: macos-latest
-            target: x86_64-apple-darwin
-            asset_name: orb-macos-x86_64
-            simple_name: ""
-            ext: ""
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            asset_name: orb-macos-aarch64
-            simple_name: orb-macos
-            ext: ""
+            build: make build-macos
+            target: macos-universal
+            asset_name: orb-macos
           - os: windows-latest
+            build: cargo build --release --target x86_64-pc-windows-msvc
             target: x86_64-pc-windows-msvc
-            asset_name: orb-windows-x86_64.exe
-            simple_name: orb-windows
-            ext: .exe
+            asset_name: orb-windows.exe
 
     steps:
       - uses: actions/checkout@v4
@@ -164,48 +85,70 @@ jobs:
         run: sudo apt-get install -y musl-tools
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: ${{ matrix.build }}
 
       - name: Strip binary (Linux/macOS)
-        if: matrix.os != 'windows-latest'
+        if: runner.os != 'Windows'
         run: strip target/${{ matrix.target }}/release/orb
 
-      - name: Prepare artifacts directory
-        run: mkdir -p artifacts
-
       - name: Prepare binary (Linux/macOS)
-        if: matrix.os != 'windows-latest'
-        run: mv target/${{ matrix.target }}/release/orb artifacts/${{ matrix.asset_name }}
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p artifacts
+          mv target/${{ matrix.target }}/release/orb artifacts/${{ matrix.asset_name }}
 
       - name: Prepare binary (Windows)
-        if: matrix.os == 'windows-latest'
-        run: mv target/${{ matrix.target }}/release/orb.exe artifacts/${{ matrix.asset_name }}
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p artifacts
+          mv target/${{ matrix.target }}/release/orb.exe artifacts/${{ matrix.asset_name }}
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        working-directory: scripts
+        run: npm install
+
+      - name: Upload to GitHub Release
+        working-directory: scripts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./artifacts/${{ matrix.asset_name }}
-          asset_name: ${{ matrix.asset_name }}
-          asset_content_type: application/octet-stream
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: npx tsx release.ts upload-asset ${{ github.ref_name }} ../artifacts/${{ matrix.asset_name }} ${{ matrix.asset_name }}
 
-      # Prepare R2 artifacts: both latest (orb-linux) and versioned (orb-linux-0.1.0)
-      - name: Prepare R2 artifacts
-        if: matrix.simple_name != ''
-        run: |
-          mkdir -p r2-artifacts
-          cp artifacts/${{ matrix.asset_name }} r2-artifacts/${{ matrix.simple_name }}${{ matrix.ext }}
-          cp artifacts/${{ matrix.asset_name }} r2-artifacts/${{ matrix.simple_name }}-${{ needs.create-release.outputs.version }}${{ matrix.ext }}
-
+      # Upload binaries to R2
       - name: Upload to R2
-        if: matrix.simple_name != ''
-        uses: ryand56/r2-upload-action@v1.4
+        working-directory: scripts
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: npx tsx release.ts upload-r2 ../artifacts downloads
+
+  # Finalize: generate and upload manifest
+  finalize:
+    name: Finalize Release
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          r2-account-id: ${{ secrets.R2_ACCOUNT_ID }}
-          r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          r2-bucket: orb
-          source-dir: ./r2-artifacts
-          destination-dir: downloads
+          node-version: "22"
+
+      - name: Install dependencies
+        working-directory: scripts
+        run: npm install
+
+      - name: Generate and upload manifest
+        working-directory: scripts
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: npx tsx release.ts finalize ${{ needs.create-release.outputs.version }}
