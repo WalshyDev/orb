@@ -34,20 +34,36 @@ impl OverrideRule {
 
     /// Parse an override rule: "HOST1:PORT1:HOST2:PORT2"
     /// HOST1 and PORT1 can be empty for wildcard matching
+    /// IPv6 addresses must be wrapped in brackets, e.g., "[::1]:80:[::1]:8080"
     pub fn parse(rule: &str) -> Option<Self> {
-        let parts: Vec<&str> = rule.split(':').collect();
-        if parts.len() != 4 {
+        let (from_host, rest) = parse_host_from_rule(rule)?;
+        let rest = rest.strip_prefix(':')?;
+
+        let (from_port_str, rest) = parse_port_from_rule(rest)?;
+        let rest = rest.strip_prefix(':')?;
+
+        let (to_host, rest) = parse_host_from_rule(rest)?;
+        let rest = rest.strip_prefix(':')?;
+
+        let (to_port_str, rest) = parse_port_from_rule(rest)?;
+
+        // Should have consumed the entire string
+        if !rest.is_empty() {
             return None;
         }
 
-        let from_host = parts[0].to_string();
-        let from_port: Option<u16> = if parts[1].is_empty() {
+        // TARGET host cannot be empty
+        if to_host.is_empty() {
+            return None;
+        }
+
+        let from_port: Option<u16> = if from_port_str.is_empty() {
             None // Empty = any port
         } else {
-            Some(parts[1].parse().ok()?)
+            Some(from_port_str.parse().ok()?)
         };
-        let to_host = parts[2].to_string();
-        let to_port: u16 = parts[3].parse().ok()?;
+
+        let to_port: u16 = to_port_str.parse().ok()?;
 
         Some(OverrideRule {
             from_host,
@@ -55,6 +71,35 @@ impl OverrideRule {
             to_host,
             to_port,
         })
+    }
+}
+
+/// Parse a host from the beginning of a connect-to rule segment.
+/// Handles IPv6 addresses in brackets (e.g., "[::1]").
+/// Returns (host, remaining_string).
+fn parse_host_from_rule(s: &str) -> Option<(String, &str)> {
+    if s.starts_with('[') {
+        // IPv6 address in brackets
+        let end_bracket = s.find(']')?;
+        let host = &s[1..end_bracket]; // Strip brackets
+        let rest = &s[end_bracket + 1..];
+        Some((host.to_string(), rest))
+    } else {
+        // Regular hostname or IPv4 - read until ':'
+        match s.find(':') {
+            Some(pos) => Some((s[..pos].to_string(), &s[pos..])),
+            None => Some((s.to_string(), "")),
+        }
+    }
+}
+
+/// Parse a port from the beginning of a connect-to rule segment.
+/// Returns (port_string, remaining_string).
+fn parse_port_from_rule(s: &str) -> Option<(String, &str)> {
+    // Read until ':' or end of string
+    match s.find(':') {
+        Some(pos) => Some((s[..pos].to_string(), &s[pos..])),
+        None => Some((s.to_string(), "")),
     }
 }
 
@@ -203,5 +248,136 @@ impl Service<http::Uri> for OrbConnector {
     fn call(&mut self, uri: http::Uri) -> Self::Future {
         let rewritten = self.rewrite_uri(uri);
         self.inner.call(rewritten)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_override_rule_parse_basic() {
+        let rule = OverrideRule::parse("example.com:80:127.0.0.1:8080").unwrap();
+        assert_eq!(rule.from_host, "example.com");
+        assert_eq!(rule.from_port, Some(80));
+        assert_eq!(rule.to_host, "127.0.0.1");
+        assert_eq!(rule.to_port, 8080);
+    }
+
+    #[test]
+    fn test_override_rule_parse_wildcard_host() {
+        let rule = OverrideRule::parse(":80:127.0.0.1:8080").unwrap();
+        assert_eq!(rule.from_host, "");
+        assert_eq!(rule.from_port, Some(80));
+        assert_eq!(rule.to_host, "127.0.0.1");
+        assert_eq!(rule.to_port, 8080);
+    }
+
+    #[test]
+    fn test_override_rule_parse_wildcard_port() {
+        let rule = OverrideRule::parse("example.com::127.0.0.1:8080").unwrap();
+        assert_eq!(rule.from_host, "example.com");
+        assert_eq!(rule.from_port, None);
+        assert_eq!(rule.to_host, "127.0.0.1");
+        assert_eq!(rule.to_port, 8080);
+    }
+
+    #[test]
+    fn test_override_rule_parse_wildcard_both() {
+        let rule = OverrideRule::parse("::127.0.0.1:8080").unwrap();
+        assert_eq!(rule.from_host, "");
+        assert_eq!(rule.from_port, None);
+        assert_eq!(rule.to_host, "127.0.0.1");
+        assert_eq!(rule.to_port, 8080);
+    }
+
+    #[test]
+    fn test_override_rule_parse_ipv6_target() {
+        let rule = OverrideRule::parse("example.com:80:[::1]:8080").unwrap();
+        assert_eq!(rule.from_host, "example.com");
+        assert_eq!(rule.from_port, Some(80));
+        assert_eq!(rule.to_host, "::1");
+        assert_eq!(rule.to_port, 8080);
+    }
+
+    #[test]
+    fn test_override_rule_parse_ipv6_source() {
+        let rule = OverrideRule::parse("[::1]:80:127.0.0.1:8080").unwrap();
+        assert_eq!(rule.from_host, "::1");
+        assert_eq!(rule.from_port, Some(80));
+        assert_eq!(rule.to_host, "127.0.0.1");
+        assert_eq!(rule.to_port, 8080);
+    }
+
+    #[test]
+    fn test_override_rule_parse_ipv6_both() {
+        let rule = OverrideRule::parse("[2001:db8::1]:80:[::1]:8080").unwrap();
+        assert_eq!(rule.from_host, "2001:db8::1");
+        assert_eq!(rule.from_port, Some(80));
+        assert_eq!(rule.to_host, "::1");
+        assert_eq!(rule.to_port, 8080);
+    }
+
+    #[test]
+    fn test_override_rule_parse_ipv6_wildcard_port() {
+        let rule = OverrideRule::parse("[::1]::[::1]:8080").unwrap();
+        assert_eq!(rule.from_host, "::1");
+        assert_eq!(rule.from_port, None);
+        assert_eq!(rule.to_host, "::1");
+        assert_eq!(rule.to_port, 8080);
+    }
+
+    #[test]
+    fn test_override_rule_parse_invalid_missing_parts() {
+        assert!(OverrideRule::parse("example.com").is_none());
+        assert!(OverrideRule::parse("example.com:80").is_none());
+        assert!(OverrideRule::parse("example.com:80:127.0.0.1").is_none());
+    }
+
+    #[test]
+    fn test_override_rule_parse_invalid_empty_target_host() {
+        assert!(OverrideRule::parse("example.com:80::8080").is_none());
+    }
+
+    #[test]
+    fn test_override_rule_parse_invalid_port() {
+        assert!(OverrideRule::parse("example.com:abc:127.0.0.1:8080").is_none());
+        assert!(OverrideRule::parse("example.com:80:127.0.0.1:abc").is_none());
+    }
+
+    #[test]
+    fn test_override_rule_parse_invalid_ipv6_unclosed_bracket() {
+        assert!(OverrideRule::parse("[::1:80:127.0.0.1:8080").is_none());
+    }
+
+    #[test]
+    fn test_override_rule_matches() {
+        let rule = OverrideRule::parse("example.com:80:127.0.0.1:8080").unwrap();
+        assert!(rule.matches("example.com", 80));
+        assert!(!rule.matches("example.com", 443));
+        assert!(!rule.matches("other.com", 80));
+    }
+
+    #[test]
+    fn test_override_rule_matches_wildcard_host() {
+        let rule = OverrideRule::parse(":80:127.0.0.1:8080").unwrap();
+        assert!(rule.matches("example.com", 80));
+        assert!(rule.matches("any.host", 80));
+        assert!(!rule.matches("example.com", 443));
+    }
+
+    #[test]
+    fn test_override_rule_matches_wildcard_port() {
+        let rule = OverrideRule::parse("example.com::127.0.0.1:8080").unwrap();
+        assert!(rule.matches("example.com", 80));
+        assert!(rule.matches("example.com", 443));
+        assert!(!rule.matches("other.com", 80));
+    }
+
+    #[test]
+    fn test_override_rule_matches_wildcard_both() {
+        let rule = OverrideRule::parse("::127.0.0.1:8080").unwrap();
+        assert!(rule.matches("example.com", 80));
+        assert!(rule.matches("any.host", 443));
     }
 }

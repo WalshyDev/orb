@@ -299,57 +299,73 @@ pub fn validate_cert_and_key(cert: Option<&PathBuf>, key: Option<&PathBuf>) {
 }
 
 /// Validate --connect-to arguments and exit with error if invalid
+/// Format: HOST1:PORT1:HOST2:PORT2
+/// IPv6 addresses must be wrapped in brackets, e.g., "[::1]:80:[::1]:8080"
 pub fn validate_connect_to(connect_to: &[String]) {
     for rule in connect_to {
-        let parts: Vec<&str> = rule.split(':').collect();
-
-        if parts.len() < 4 {
-            if parts.len() == 3 {
-                crate::fatal!("Invalid --connect-to format '{}'. PORT2 is required", rule);
-            } else {
-                crate::fatal!(
-                    "Invalid --connect-to format '{}'. Expected HOST1:PORT1:HOST2:PORT2",
-                    rule
-                );
+        // Use OverrideRule::parse which handles IPv6 addresses properly
+        match OverrideRule::parse(rule) {
+            Some(_) => {
+                // Valid rule
+            }
+            None => {
+                // Try to provide a more specific error message
+                let error_detail = diagnose_connect_to_error(rule);
+                crate::fatal!("Invalid --connect-to format '{}'. {}", rule, error_detail);
             }
         }
+    }
+}
 
-        let _host1 = parts[0]; // Can be empty for wildcard
-        let port1_str = parts[1]; // Can be empty for wildcard
-        let host2 = parts[2];
-        let port2_str = parts[3];
+/// Diagnose why a connect-to rule is invalid and provide a helpful error message
+fn diagnose_connect_to_error(rule: &str) -> String {
+    // Check for unclosed IPv6 bracket FIRST
+    let open_brackets = rule.chars().filter(|&c| c == '[').count();
+    let close_brackets = rule.chars().filter(|&c| c == ']').count();
+    if open_brackets != close_brackets {
+        return "Unclosed bracket in IPv6 address".to_string();
+    }
 
-        // Validate PORT1 (empty is valid - means any port)
-        if !port1_str.is_empty() && port1_str.parse::<u16>().is_err() {
-            crate::fatal!(
-                "Invalid --connect-to format '{}'. PORT1 '{}' is not a valid port number",
-                rule,
-                port1_str
-            );
-        }
-
-        // Validate HOST2 (must be specified)
-        if host2.is_empty() {
-            crate::fatal!(
-                "Invalid --connect-to format '{}'. HOST2 cannot be empty",
-                rule
-            );
-        }
-
-        // Validate PORT2 (must be a valid port)
-        if port2_str.parse::<u16>().is_err() {
-            crate::fatal!(
-                "Invalid --connect-to format '{}'. PORT2 '{}' is not a valid port number",
-                rule,
-                port2_str
-            );
-        }
-
-        // Validate that the rule can be parsed
-        if OverrideRule::parse(rule).is_none() {
-            crate::fatal!("Invalid --connect-to format '{}'", rule);
+    // Count non-bracketed colons to estimate the structure
+    let mut colon_count = 0;
+    let mut in_bracket = false;
+    for c in rule.chars() {
+        match c {
+            '[' => in_bracket = true,
+            ']' => in_bracket = false,
+            ':' if !in_bracket => colon_count += 1,
+            _ => {}
         }
     }
+
+    if colon_count < 3 {
+        if colon_count == 2 {
+            return "PORT2 is required".to_string();
+        }
+        return "Expected HOST1:PORT1:HOST2:PORT2 (IPv6 addresses must be in brackets, e.g., [::1])".to_string();
+    }
+
+    // Try to parse and identify specific issues
+    let parts: Vec<&str> = rule.split(':').collect();
+
+    // Check for empty HOST2 first (pattern like "host:port::port" - exactly 4 parts with empty third)
+    // This takes precedence over IPv6 detection because it's a more specific pattern
+    if parts.len() == 4 && parts[2].is_empty() {
+        return "HOST2 cannot be empty".to_string();
+    }
+
+    // Check for unbracketed IPv6 address:
+    // - Contains "::" without brackets AND has more than 4 colon-separated parts
+    //   (a valid rule without IPv6 has exactly 4 parts)
+    // - Or starts with "::" (clear IPv6 pattern)
+    if !rule.contains('[') && (parts.len() > 4 || rule.starts_with("::")) {
+        return "IPv6 addresses must be enclosed in brackets, e.g., [::1]:80:[::1]:8080"
+            .to_string();
+    }
+
+    // Check for invalid port numbers by looking at what looks like port positions
+    // This is a best-effort heuristic
+    "PORT1 or PORT2 is not a valid port number".to_string()
 }
 
 /// Validate --cookie argument if provided

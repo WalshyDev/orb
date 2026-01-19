@@ -1814,7 +1814,7 @@ fn test_connect_to(connect_to_pattern: &str) {
 
 #[test_case(
     "example.com",
-    "Invalid --connect-to format 'example.com'. Expected HOST1:PORT1:HOST2:PORT2";
+    "Invalid --connect-to format 'example.com'. Expected HOST1:PORT1:HOST2:PORT2 (IPv6 addresses must be in brackets, e.g., [::1])";
     "missing parts"
 )]
 #[test_case(
@@ -1824,18 +1824,28 @@ fn test_connect_to(connect_to_pattern: &str) {
 )]
 #[test_case(
     "example.com:abc:127.0.0.1:8080",
-    "Invalid --connect-to format 'example.com:abc:127.0.0.1:<PORT>'. PORT1 'abc' is not a valid port number";
+    "Invalid --connect-to format 'example.com:abc:127.0.0.1:<PORT>'. PORT1 or PORT2 is not a valid port number";
     "invalid port1"
 )]
 #[test_case(
     "example.com:80:127.0.0.1:abc",
-    "Invalid --connect-to format 'example.com:80:127.0.0.1:abc'. PORT2 'abc' is not a valid port number";
+    "Invalid --connect-to format 'example.com:80:127.0.0.1:abc'. PORT1 or PORT2 is not a valid port number";
     "invalid port2"
 )]
 #[test_case(
     "example.com:80:127.0.0.1",
     "Invalid --connect-to format 'example.com:80:127.0.0.1'. PORT2 is required";
     "missing port2"
+)]
+#[test_case(
+    "::1:80:127.0.0.1:8080",
+    "Invalid --connect-to format '::1:80:127.0.0.1:<PORT>'. IPv6 addresses must be enclosed in brackets, e.g., [::1]:80:[::1]:8080";
+    "ipv6 no bracket"
+)]
+#[test_case(
+    "[::1:80:127.0.0.1:8080",
+    "Invalid --connect-to format '[::1:80:127.0.0.1:<PORT>'. Unclosed bracket in IPv6 address";
+    "unclosed ipv6 bracket"
 )]
 fn test_connect_to_invalid(connect_to: &str, expected_error: &str) {
     let mut cmd = Command::new(cargo_bin!("orb"));
