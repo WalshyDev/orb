@@ -7,6 +7,7 @@ mod error;
 mod headers;
 mod output;
 mod request;
+mod update;
 mod verbose_events;
 mod websocket;
 
@@ -26,6 +27,14 @@ use crate::websocket::{handle_websocket, is_websocket_url, validate_websocket_op
 
 #[tokio::main]
 async fn main() {
+    // Apply any staged update (fast, synchronous check)
+    if let Some(version) = update::apply_pending() {
+        eprintln!("* Updated orb to version {}", version);
+    }
+
+    // Spawn background update check (non-blocking)
+    update::init();
+
     let args = cli::Args::parse();
 
     let url = Url::parse(&args.url).unwrap_or_else(|err| {
