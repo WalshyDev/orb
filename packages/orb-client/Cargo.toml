@@ -25,7 +25,7 @@ http-body-util = "0.1"
 bytes = "1.9"
 
 # JSON
-serde_json = { version = "1.0.148" }
+serde_json = { version = "1.0.149" }
 
 # HTTP/1.1 + HTTP/2
 hyper = { version = "1.6", features = ["client", "http1", "http2"] }
