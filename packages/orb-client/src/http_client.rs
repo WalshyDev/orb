@@ -10,10 +10,8 @@ use hyper::body::Incoming;
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 
-use crate::tls::TlsCapturingConnector;
-use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
-use rustls::{DigitallySignedStruct, SignatureScheme};
+use crate::tls::{TlsCapturingConnector, insecure_cert_verifier};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::time::timeout;
 use url::Url;
 
@@ -101,7 +99,7 @@ impl HttpClientBuilder {
         let tls_config = if self.insecure {
             rustls::ClientConfig::builder()
                 .dangerous()
-                .with_custom_certificate_verifier(Arc::new(InsecureServerCertVerifier))
+                .with_custom_certificate_verifier(insecure_cert_verifier())
                 .with_no_client_auth()
         } else {
             let mut root_store = rustls::RootCertStore::empty();
@@ -623,54 +621,4 @@ fn boxed_empty() -> BoxBody {
 
 fn boxed_full(bytes: Bytes) -> BoxBody {
     Full::new(bytes).map_err(|_| unreachable!()).boxed()
-}
-
-/// A certificate verifier that accepts all certificates
-#[derive(Debug)]
-struct InsecureServerCertVerifier;
-
-impl ServerCertVerifier for InsecureServerCertVerifier {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        vec![
-            SignatureScheme::RSA_PKCS1_SHA256,
-            SignatureScheme::RSA_PKCS1_SHA384,
-            SignatureScheme::RSA_PKCS1_SHA512,
-            SignatureScheme::ECDSA_NISTP256_SHA256,
-            SignatureScheme::ECDSA_NISTP384_SHA384,
-            SignatureScheme::ECDSA_NISTP521_SHA512,
-            SignatureScheme::RSA_PSS_SHA256,
-            SignatureScheme::RSA_PSS_SHA384,
-            SignatureScheme::RSA_PSS_SHA512,
-            SignatureScheme::ED25519,
-        ]
-    }
 }

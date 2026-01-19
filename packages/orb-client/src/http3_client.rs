@@ -1,6 +1,5 @@
 //! HTTP/3 client implementation using quinn (QUIC) and h3
 
-use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -9,17 +8,15 @@ use h3::client::SendRequest;
 use h3_quinn::OpenStreams;
 use http::{Request, Version};
 use quinn::{ClientConfig, Endpoint, TransportConfig};
-use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
-use rustls::{DigitallySignedStruct, SignatureScheme};
 use tokio::time::timeout;
 
 use crate::Response;
 use crate::body::{RequestBody, ResponseBody};
-use crate::dns::OverrideRule;
+use crate::dns::{apply_dns_overrides, resolve_address};
 use crate::error::OrbError;
-use crate::events::{BoxedEventHandler, ClientEvent};
+use crate::events::ClientEvent;
 use crate::http_client::RequestBuilder;
+use crate::tls::build_client_tls_config;
 
 /// Send an HTTP/3 request
 pub async fn send_http3_request(builder: RequestBuilder) -> Result<Response, OrbError> {
@@ -37,12 +34,15 @@ pub async fn send_http3_request(builder: RequestBuilder) -> Result<Response, Orb
     let addr = resolve_address(&target_host, target_port)?;
 
     // Build TLS config for QUIC
-    let tls_config = build_tls_config(
+    let mut tls_config = build_client_tls_config(
         builder.insecure,
         builder.use_system_cert_store,
         &builder.ca_certs,
         builder.client_cert.as_ref(),
     )?;
+
+    // Set ALPN for HTTP/3
+    tls_config.alpn_protocols = vec![b"h3".to_vec()];
 
     // Emit connection start event
     if let Some(ref handler) = builder.event_handler {
@@ -243,135 +243,4 @@ async fn send_request_h3(
         response_body,
         content_length,
     ))
-}
-
-fn apply_dns_overrides(
-    host: &str,
-    port: u16,
-    overrides: &[OverrideRule],
-    event_handler: &Option<BoxedEventHandler>,
-) -> (String, u16) {
-    for rule in overrides {
-        if rule.matches(host, port) {
-            if let Some(handler) = event_handler {
-                handler.on_event(ClientEvent::ConnectToOverride {
-                    from_host: host.to_string(),
-                    from_port: port,
-                    to_host: rule.to_host.clone(),
-                    to_port: rule.to_port,
-                });
-            }
-            return (rule.to_host.clone(), rule.to_port);
-        }
-    }
-    (host.to_string(), port)
-}
-
-fn resolve_address(host: &str, port: u16) -> Result<SocketAddr, OrbError> {
-    let addr_str = format!("{}:{}", host, port);
-    addr_str
-        .to_socket_addrs()
-        .map_err(|e| OrbError::Dns(e.to_string()))?
-        .next()
-        .ok_or_else(|| OrbError::Dns(format!("No addresses found for {}", host)))
-}
-
-fn build_tls_config(
-    insecure: bool,
-    use_system_cert_store: bool,
-    ca_certs: &[CertificateDer<'static>],
-    client_cert: Option<&(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)>,
-) -> Result<rustls::ClientConfig, OrbError> {
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    let mut config = if insecure {
-        rustls::ClientConfig::builder()
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(InsecureServerCertVerifier))
-            .with_no_client_auth()
-    } else {
-        let mut root_store = rustls::RootCertStore::empty();
-
-        if use_system_cert_store {
-            // Load certificates from the system's native certificate store
-            let native_certs = rustls_native_certs::load_native_certs();
-            for cert in native_certs.certs {
-                root_store.add(cert).ok();
-            }
-        } else {
-            // Use bundled webpki-roots (Mozilla's root certificates)
-            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        }
-
-        // Add custom CA certificates if provided
-        for cert in ca_certs {
-            root_store.add(cert.clone()).ok();
-        }
-
-        let config_builder = rustls::ClientConfig::builder().with_root_certificates(root_store);
-
-        // Add client certificate if provided
-        if let Some((certs, key)) = client_cert {
-            config_builder
-                .with_client_auth_cert(certs.clone(), key.clone_key())
-                .map_err(|e| OrbError::Tls(e.to_string()))?
-        } else {
-            config_builder.with_no_client_auth()
-        }
-    };
-
-    // Set ALPN for HTTP/3
-    config.alpn_protocols = vec![b"h3".to_vec()];
-
-    Ok(config)
-}
-
-/// A certificate verifier that accepts all certificates (for --insecure mode)
-#[derive(Debug)]
-struct InsecureServerCertVerifier;
-
-impl ServerCertVerifier for InsecureServerCertVerifier {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        vec![
-            SignatureScheme::RSA_PKCS1_SHA256,
-            SignatureScheme::RSA_PKCS1_SHA384,
-            SignatureScheme::RSA_PKCS1_SHA512,
-            SignatureScheme::ECDSA_NISTP256_SHA256,
-            SignatureScheme::ECDSA_NISTP384_SHA384,
-            SignatureScheme::ECDSA_NISTP521_SHA512,
-            SignatureScheme::RSA_PSS_SHA256,
-            SignatureScheme::RSA_PSS_SHA384,
-            SignatureScheme::RSA_PSS_SHA512,
-            SignatureScheme::ED25519,
-        ]
-    }
 }
