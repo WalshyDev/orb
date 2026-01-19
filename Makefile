@@ -26,7 +26,7 @@ help:
 	@echo ""
 	@echo "Docs Commands:"
 	@echo "  make docs               - Generate documentation"
-	@echo "  make docs-dev 		     - Start dev server for docs"
+	@echo "  make docs-dev           - Start dev server for docs"
 
 build:
 	cargo build
@@ -59,23 +59,18 @@ size:
 	@du -h target/release/orb | awk '{print $$1}'
 
 build-macos:
-	cargo build --release --target x86
+	cargo build --release --target x86_64-apple-darwin
 	cargo build --release --target aarch64-apple-darwin
 	lipo -create -output target/release/orb-macos-universal target/x86_64-apple-darwin/release/orb target/aarch64-apple-darwin/release/orb
 	@echo "Built macOS universal binary at: target/release/orb-macos-universal"
 
 build-linux:
-	cargo build --release --target x86
-	@echo "Built Linux binary at: target/x86_64-unknown-linux-gnu/release/orb"
+	cargo build --release --target x86_64-unknown-linux-musl
+	@echo "Built Linux binary at: target/x86_64-unknown-linux-musl/release/orb"
 
 build-windows:
-	cargo build --release --target x86_64-pc-windows-gnu
-	@echo "Built Windows binary at: target/x86_64-pc-windows-gnu/release/orb.exe"
-
-build-binaries:
-	$(MAKE) build-macos
-	$(MAKE) build-linux
-	$(MAKE) build-windows
+	cargo build --release --target x86_64-pc-windows-msvc
+	@echo "Built Windows binary at: target/x86_64-pc-windows-msvc/release/orb.exe"
 
 .PHONY: docs
 docs:

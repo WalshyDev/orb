@@ -4,7 +4,7 @@ interface Env {
 }
 
 // Matches: orb-macos, orb-linux, orb-windows, orb-macos-0.1.0, orb-linux-1.2.3, etc.
-const BINARY_PATTERN = /^orb-(macos|linux|windows)(-\d+\.\d+\.\d+)?$/;
+const BINARY_PATTERN = /^orb-(macos|linux|windows)(-\d+\.\d+\.\d+)?(\.exe)?$/;
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
