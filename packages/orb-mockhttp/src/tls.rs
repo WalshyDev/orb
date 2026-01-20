@@ -111,18 +111,15 @@ impl TlsConfig {
         self.cert.as_ref()
     }
 
-    /// Build a rustls ServerConfig for HTTP/1.1 and HTTP/2
-    #[allow(dead_code)]
-    pub(crate) fn build_rustls_server_config(&self) -> Arc<rustls::ServerConfig> {
+    /// Build a base rustls ServerConfig (shared by all TLS methods)
+    fn build_base_server_config(&self) -> rustls::ServerConfig {
         // Install crypto provider if not already installed
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-        let config = rustls::ServerConfig::builder()
+        rustls::ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(vec![self.cert.clone()], self.private_key())
-            .expect("Failed to build rustls server config");
-
-        Arc::new(config)
+            .expect("Failed to build rustls server config")
     }
 
     /// Build a rustls ServerConfig with specific ALPN protocols
@@ -134,13 +131,7 @@ impl TlsConfig {
         http1: bool,
         http2: bool,
     ) -> Arc<rustls::ServerConfig> {
-        // Install crypto provider if not already installed
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-        let mut config = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(vec![self.cert.clone()], self.private_key())
-            .expect("Failed to build rustls server config");
+        let mut config = self.build_base_server_config();
 
         // Set ALPN protocols based on what's enabled
         // Order matters: prefer h2 over http/1.1
@@ -158,19 +149,13 @@ impl TlsConfig {
 
     /// Build a TlsAcceptor for WebSocket TLS
     pub(crate) fn build_tls_acceptor(&self) -> tokio_rustls::TlsAcceptor {
-        let config = self.build_rustls_server_config();
+        let config = Arc::new(self.build_base_server_config());
         tokio_rustls::TlsAcceptor::from(config)
     }
 
     /// Build a Quinn ServerConfig for HTTP/3
     pub(crate) fn build_quic_server_config(&self) -> quinn::ServerConfig {
-        // Install crypto provider if not already installed
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-        let mut server_crypto = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(vec![self.cert.clone()], self.private_key())
-            .expect("Failed to build rustls server config");
+        let mut server_crypto = self.build_base_server_config();
 
         // Set ALPN protocol for HTTP/3
         server_crypto.alpn_protocols = vec![b"h3".to_vec()];
