@@ -11,6 +11,16 @@ use crate::cli::Args;
 use crate::request::{load_ca_certs, load_client_cert, parse_connect_to_rules};
 use crate::verbose_events::VerboseEventHandler;
 
+// ANSI color codes for terminal output
+mod color {
+    pub const GREEN: &str = "\x1b[32m";
+    pub const YELLOW: &str = "\x1b[33m";
+    pub const RED: &str = "\x1b[31m";
+    pub const CYAN: &str = "\x1b[36m";
+    pub const DIM: &str = "\x1b[2m";
+    pub const RESET: &str = "\x1b[0m";
+}
+
 /// Check if URL is a WebSocket URL
 pub fn is_websocket_url(url: &Url) -> bool {
     matches!(url.scheme(), "ws" | "wss")
@@ -246,12 +256,7 @@ async fn handle_tty_interactive_mode(mut stream: WebSocketStream, args: &Args) {
     use std::io::BufRead;
     use std::thread;
 
-    // ANSI color codes
-    const GREEN: &str = "\x1b[32m";
-    const YELLOW: &str = "\x1b[33m";
-    const RED: &str = "\x1b[31m";
-    const DIM: &str = "\x1b[2m";
-    const RESET: &str = "\x1b[0m";
+    use color::*;
 
     let silent = args.silent;
     let url = stream.url().to_string();
@@ -378,9 +383,7 @@ async fn handle_tty_interactive_mode(mut stream: WebSocketStream, args: &Args) {
 
 /// Print a message received in interactive mode
 fn print_interactive_message(msg: &WebSocketMessage, _silent: bool) {
-    const CYAN: &str = "\x1b[36m";
-    const YELLOW: &str = "\x1b[33m";
-    const RESET: &str = "\x1b[0m";
+    use color::*;
 
     match msg {
         WebSocketMessage::Text(text) => {

@@ -41,6 +41,13 @@ async fn main() {
         fatal!("Invalid URL {}", err);
     });
 
+    // Validate options common to both WebSocket and HTTP
+    if !args.connect_to.is_empty() {
+        validate_connect_to(&args.connect_to);
+    }
+    validate_cert_and_key(args.cert.as_ref(), args.key.as_ref());
+    validate_cacert(args.cacert.as_ref());
+
     // Check if this is a WebSocket URL
     if is_websocket_url(&url) {
         // Validate that only supported options are used
@@ -48,24 +55,12 @@ async fn main() {
             fatal!("{}", error);
         }
 
-        // Validate options that ARE supported for WebSocket
-        if !args.connect_to.is_empty() {
-            validate_connect_to(&args.connect_to);
-        }
-        validate_cert_and_key(args.cert.as_ref(), args.key.as_ref());
-        validate_cacert(args.cacert.as_ref());
-
         // Handle WebSocket connection
         handle_websocket(&args, &url).await;
         return;
     }
 
-    // HTTP flow: validate all options
-    if !args.connect_to.is_empty() {
-        validate_connect_to(&args.connect_to);
-    }
-    validate_cert_and_key(args.cert.as_ref(), args.key.as_ref());
-    validate_cacert(args.cacert.as_ref());
+    // HTTP-only validation
     validate_cookie(args.cookie.as_ref());
     validate_proxy(args.proxy.as_ref());
 
