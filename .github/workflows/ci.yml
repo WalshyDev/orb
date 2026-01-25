@@ -5,6 +5,10 @@ on:
     paths:
       - 'packages/**'
       - '.github/workflows/ci.yml'
+  pull_request:
+    paths:
+      - 'packages/**'
+      - '.github/workflows/ci.yml'
   # Allow manual trigger for e2e tests
   workflow_dispatch:
 
@@ -83,8 +87,11 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    # Run on release/* branches, or when manually triggered
-    if: startsWith(github.ref, 'refs/heads/release/') || github.event_name == 'workflow_dispatch'
+    # Run on release/* branches (push or PR from release branch), or when manually triggered
+    if: |
+      startsWith(github.ref, 'refs/heads/release/') ||
+      startsWith(github.head_ref, 'release/') ||
+      github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
