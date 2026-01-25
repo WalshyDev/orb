@@ -60,9 +60,9 @@ fn test_form_raw() {
     POST / HTTP/1.1
     accept: */*
     user-agent: orb/0.1.0
-    host: 127.0.0.1:<PORT>
     content-type: multipart/form-data; boundary=<BOUNDARY>
     content-length: 131
+    host: 127.0.0.1:<PORT>
 
     --<BOUNDARY>
     Content-Disposition: form-data; name="field1"

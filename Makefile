@@ -8,6 +8,7 @@ help:
 	@echo ""
 	@echo "Test Commands:"
 	@echo "  make test               - Run all tests"
+	@echo "  make test-e2e           - Run e2e tests (requires internet)"
 	@echo "  make coverage           - Generate HTML coverage report"
 	@echo ""
 	@echo "Quality Commands:"
@@ -36,6 +37,9 @@ release:
 
 test:
 	cargo test
+
+test-e2e:
+	cargo test --test e2e -- --ignored
 
 coverage:
 	cargo llvm-cov --html

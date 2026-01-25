@@ -148,6 +148,10 @@ async fn send_request_h3(
     let mut req_builder = Request::builder().uri(uri).method(builder.method.clone());
 
     for (key, value) in builder.headers.iter() {
+        // Skip Host header - h3 uses :authority pseudo-header from the URI
+        if key == http::header::HOST {
+            continue;
+        }
         req_builder = req_builder.header(key, value);
     }
 

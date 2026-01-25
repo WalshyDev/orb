@@ -36,6 +36,7 @@ pub struct HttpClientBuilder {
     event_handler: Option<BoxedEventHandler>,
     ca_certs: Vec<CertificateDer<'static>>,
     client_cert: Option<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)>,
+    http_version: Option<Version>,
 }
 
 impl HttpClientBuilder {
@@ -93,6 +94,11 @@ impl HttpClientBuilder {
         self
     }
 
+    pub fn http_version(mut self, version: Version) -> Self {
+        self.http_version = Some(version);
+        self
+    }
+
     pub fn build(self) -> HttpClient {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -139,11 +145,18 @@ impl HttpClientBuilder {
             self.event_handler.clone(),
         );
 
-        let https = HttpsConnectorBuilder::new()
+        // Configure ALPN based on requested HTTP version
+        let https_builder = HttpsConnectorBuilder::new()
             .with_tls_config(tls_config)
-            .https_or_http()
-            .enable_all_versions()
-            .wrap_connector(connector);
+            .https_or_http();
+
+        let https = match self.http_version {
+            Some(Version::HTTP_11) => https_builder.enable_http1().wrap_connector(connector),
+            Some(Version::HTTP_2) => https_builder.enable_http2().wrap_connector(connector),
+            _ => https_builder
+                .enable_all_versions()
+                .wrap_connector(connector),
+        };
 
         // Wrap with TLS-capturing connector to emit TLS handshake events
         let tls_capturing = TlsCapturingConnector::new(https, self.event_handler.clone());
@@ -170,12 +183,19 @@ impl HttpClient {
     pub async fn execute(&self, builder: RequestBuilder) -> Result<Response, OrbError> {
         let uri: http::Uri = builder.url.as_str().parse().expect("Invalid URL");
 
-        let mut req_builder = Request::builder()
-            .uri(uri)
-            .method(builder.method.clone())
-            .version(builder.http_version.unwrap_or(Version::HTTP_11));
+        let mut req_builder = Request::builder().uri(uri).method(builder.method.clone());
+
+        // Only set version if explicitly specified - otherwise let hyper use what ALPN negotiated
+        if let Some(version) = builder.http_version {
+            req_builder = req_builder.version(version);
+        }
 
         for (key, value) in builder.headers.iter() {
+            // Skip Host header - hyper handles this via :authority for HTTP/2
+            // and generates it from the URI for HTTP/1.1
+            if key == http::header::HOST {
+                continue;
+            }
             req_builder = req_builder.header(key, value);
         }
 
@@ -580,6 +600,7 @@ impl RequestBuilder {
         let insecure = self.insecure;
         let use_system_cert_store = self.use_system_cert_store;
         let max_time = self.max_time;
+        let http_version = self.http_version;
 
         // Clone event handler for the connector, keep original for request events
         let event_handler_for_connector = self.event_handler.clone();
@@ -593,6 +614,10 @@ impl RequestBuilder {
             .use_system_cert_store(use_system_cert_store)
             .dns_overrides(dns_overrides)
             .ca_certs(ca_certs);
+
+        if let Some(version) = http_version {
+            builder = builder.http_version(version);
+        }
 
         if let Some(handler) = event_handler_for_connector {
             builder = builder.event_handler(handler);
