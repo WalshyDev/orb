@@ -56,14 +56,20 @@ jobs:
           - os: ubuntu-latest
             build: make build-linux
             target: x86_64-unknown-linux-musl
+            cache_key: x86_64-unknown-linux-musl
+            binary_path: target/x86_64-unknown-linux-musl/release/orb
             asset_name: orb-linux
           - os: macos-latest
             build: make build-macos
-            target: macos-universal
+            target: x86_64-apple-darwin,aarch64-apple-darwin
+            cache_key: macos-universal
+            binary_path: target/release/orb-macos-universal
             asset_name: orb-macos
           - os: windows-latest
             build: cargo build --release --target x86_64-pc-windows-msvc
             target: x86_64-pc-windows-msvc
+            cache_key: x86_64-pc-windows-msvc
+            binary_path: target/x86_64-pc-windows-msvc/release/orb.exe
             asset_name: orb-windows.exe
 
     steps:
@@ -78,7 +84,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           prefix-key: "v1-release"
-          key: ${{ matrix.target }}
+          key: ${{ matrix.cache_key }}
 
       - name: Install musl tools
         if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -89,19 +95,12 @@ jobs:
 
       - name: Strip binary (Linux/macOS)
         if: runner.os != 'Windows'
-        run: strip target/${{ matrix.target }}/release/orb
+        run: strip ${{ matrix.binary_path }}
 
-      - name: Prepare binary (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Prepare binary
         run: |
           mkdir -p artifacts
-          mv target/${{ matrix.target }}/release/orb artifacts/${{ matrix.asset_name }}
-
-      - name: Prepare binary (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          mkdir -p artifacts
-          mv target/${{ matrix.target }}/release/orb.exe artifacts/${{ matrix.asset_name }}
+          mv ${{ matrix.binary_path }} artifacts/${{ matrix.asset_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -118,6 +117,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: npx tsx release.ts upload-asset ${{ github.ref_name }} ../artifacts/${{ matrix.asset_name }} ${{ matrix.asset_name }}
+
+      # Create versioned copy of binary
+      - name: Create versioned binary
+        shell: bash
+        run: |
+          cd artifacts
+          ASSET_NAME="${{ matrix.asset_name }}"
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Handle .exe extension properly (orb-windows.exe -> orb-windows-0.3.0.exe)
+          if [[ "${ASSET_NAME}" == *.exe ]]; then
+            VERSIONED_NAME="${ASSET_NAME%.exe}-${VERSION}.exe"
+          else
+            VERSIONED_NAME="${ASSET_NAME}-${VERSION}"
+          fi
+          cp "${ASSET_NAME}" "${VERSIONED_NAME}"
 
       # Upload binaries to R2
       - name: Upload to R2

@@ -37,6 +37,9 @@ const PLATFORMS: Record<string, { downloadName: string }> = {
   "x86_64-pc-windows-msvc": { downloadName: "orb-windows.exe" },
 };
 
+// All unique downloads that must be present for a complete release
+const REQUIRED_DOWNLOADS = ["orb-linux", "orb-macos", "orb-windows.exe"];
+
 function getGitHubConfig(): GitHubConfig {
   const token = process.env.GITHUB_TOKEN;
   const repository = process.env.GITHUB_REPOSITORY;
@@ -179,14 +182,15 @@ async function cmdFinalize(version: string): Promise<void> {
       }
     }
 
+    const downloadUrl = `${baseUrl}/${platform.downloadName}`;
     console.error(`  Fetching ${platform.downloadName}...`);
     try {
-      const response = await fetch(`${baseUrl}/${platform.downloadName}`, {
+      const response = await fetch(downloadUrl, {
         headers: { "User-Agent": "orb-release-script" },
       });
 
       if (!response.ok) {
-        console.error(`    Skipping: HTTP ${response.status}`);
+        console.error(`    Failed: HTTP ${response.status} from ${downloadUrl}`);
         continue;
       }
 
@@ -194,7 +198,7 @@ async function cmdFinalize(version: string): Promise<void> {
       const sha256 = createHash("sha256").update(buffer).digest("hex");
 
       manifest.binaries[target] = {
-        url: `${baseUrl}/${platform.downloadName}`,
+        url: downloadUrl,
         sha256,
       };
 
@@ -207,6 +211,16 @@ async function cmdFinalize(version: string): Promise<void> {
 
   if (Object.keys(manifest.binaries).length === 0) {
     console.error("Error: No platforms were successfully processed!");
+    process.exit(1);
+  }
+
+  // Verify all required downloads are present
+  const missingDownloads = REQUIRED_DOWNLOADS.filter(
+    (name) => !processedDownloads.has(name)
+  );
+  if (missingDownloads.length > 0) {
+    console.error(`Error: Missing required binaries: ${missingDownloads.join(", ")}`);
+    console.error("All platform binaries must be available for a complete release.");
     process.exit(1);
   }
 

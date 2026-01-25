@@ -72,7 +72,10 @@ build-windows:
 	cargo build --release --target x86_64-pc-windows-msvc
 	@echo "Built Windows binary at: target/x86_64-pc-windows-msvc/release/orb.exe"
 
-.PHONY: docs
+build-binaries: build-macos build-linux build-windows
+	@echo "Built all platform binaries"
+
+.PHONY: docs build-binaries
 docs:
 	cd docs && npm run build
 
