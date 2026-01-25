@@ -5,6 +5,9 @@ on:
     paths:
       - 'packages/**'
       - '.github/workflows/ci.yml'
+  # Allow manual trigger for e2e tests
+  workflow_dispatch:
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -75,3 +78,27 @@ jobs:
 
       - name: Run linting
         run: make lint
+
+  # E2E tests run on release branches to catch issues before release
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    # Run on release/* branches, or when manually triggered
+    if: startsWith(github.ref, 'refs/heads/release/') || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+          shared-key: e2e
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Run E2E tests
+        run: make test-e2e
