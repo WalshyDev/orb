@@ -53,7 +53,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Multipart
 mime_guess = "2.0"
-uuid = { version = "1.19.0", features = ["v4"] }
+uuid = { version = "1.20.0", features = ["v4"] }
 
 # TTY detection for WebSocket interactive mode
 atty = "0.2"
