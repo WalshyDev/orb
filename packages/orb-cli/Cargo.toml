@@ -67,7 +67,7 @@ assert_cmd = "2.1"
 predicates = "3.1"
 test-case = "3.3.1"
 insta = "1.46.0"
-regex = "1.12.2"
+regex = "1.12.3"
 rcgen = "0.14.7"  # For HTTP/3 test certificate generation
 tempfile = "3.15"  # For temporary cert files in tests
 orb-mockhttp = { path = "../orb-mockhttp" }
