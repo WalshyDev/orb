@@ -20,7 +20,7 @@ path = "src/main.rs"
 orb-client = { path = "../orb-client" }
 
 base64 = "0.22"
-clap = { version = "4.5.54", features = ["derive"] }
+clap = { version = "4.5.57", features = ["derive"] }
 futures-util = "0.3"
 indicatif = "0.18.3"
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "net", "io-util", "io-std", "time"] }
