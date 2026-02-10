@@ -42,7 +42,7 @@ h3-quinn = "0.0.10"
 rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
 rustls-native-certs = "0.8"
 tokio-rustls = "0.26"
-webpki-roots = "1.0.5"
+webpki-roots = "1.0.6"
 x509-parser = "0.18.0"
 
 # WebSocket
