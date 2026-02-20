@@ -204,6 +204,41 @@ fn test_data_explicit_method(method: &str, data: &str, expected_body: &str) {
 }
 
 #[test]
+fn test_data_user_content_type_not_overridden() {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test"))
+        .arg("-X")
+        .arg("POST")
+        .arg("-d")
+        .arg(r#"{"foo": true}"#)
+        .arg("-H")
+        .arg("Content-Type: application/json");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request
+            .to_lowercase()
+            .contains("content-type: application/json"),
+        "Expected user-specified Content-Type: application/json, got: {}",
+        request
+    );
+    assert!(
+        !request
+            .to_lowercase()
+            .contains("content-type: application/x-www-form-urlencoded"),
+        "User Content-Type should not be overridden by -d default, got: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
+#[test]
 fn test_json() {
     let server = TestServerBuilder::new().build();
     server.on_request("/test").respond_with(200, "OK");

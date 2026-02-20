@@ -45,14 +45,17 @@ pub async fn build_request(builder: RequestBuilder, args: &Args, url: &Url) -> R
     }
 
     let headers = build_headers(args, url);
+    let user_has_content_type = headers.contains_key(CONTENT_TYPE);
     builder = builder.headers(headers);
 
     // Set HTTP version
     builder = set_http_version(builder, args);
 
-    // Build body
+    // Build body — only set auto Content-Type if the user didn't specify one via -H
     let (body, content_type) = build_body(args).await;
-    if let Some(ct) = content_type {
+    if let Some(ct) = content_type
+        && !user_has_content_type
+    {
         builder = builder.header(CONTENT_TYPE, ct);
     }
 
