@@ -28,7 +28,7 @@ url = "2.5.7"
 
 # Core HTTP types
 http = "1.2"
-bytes = "1.9"
+bytes = "1.11"
 
 # TLS (for certificate parsing in CLI validation)
 rustls-pemfile = "2.2"
