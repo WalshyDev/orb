@@ -116,8 +116,8 @@ pub async fn handle_response(
     let content_length = response.content_length();
 
     // Determine content encoding for decompression
-    // Only decompress if --compressed flag is set
-    let content_encoding = if args.compressed {
+    // Decompress if --compressed or --compress-algo is set
+    let content_encoding = if args.compressed || args.compress_algo.is_some() {
         response
             .headers()
             .get(http::header::CONTENT_ENCODING)

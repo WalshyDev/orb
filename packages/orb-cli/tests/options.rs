@@ -1137,6 +1137,39 @@ fn test_compress_algo(algo: &str, expected_encoding: &str) {
     server.assert_requests(1);
 }
 
+#[test_case("gzip", "gzip"; "gzip")]
+#[test_case("deflate", "deflate"; "deflate")]
+#[test_case("brotli", "br"; "brotli")]
+#[test_case("zstd", "zstd"; "zstd")]
+#[tokio::test]
+async fn test_compress_algo_decompresses(algo: &str, encoding: &str) {
+    let original = "Hello, World!";
+    let compressed = compress_data(original.as_bytes(), encoding).await;
+    let encoding_owned = encoding.to_string();
+
+    let server = TestServerBuilder::new().build();
+    server.on_request_fn("/test", move |_req| {
+        ResponseBuilder::new()
+            .status(200)
+            .header("content-encoding", encoding_owned.as_str())
+            .body(compressed.clone())
+            .build()
+    });
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test"))
+        .arg("--compress-algo")
+        .arg(algo);
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    // With --compress-algo, the response should be decompressed
+    let body = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(body, original);
+    server.assert_requests(1);
+}
+
 #[tokio::test]
 async fn test_manual_accept_encoding_returns_raw_compressed() {
     let original = "Hello, World!";
