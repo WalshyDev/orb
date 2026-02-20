@@ -353,6 +353,53 @@ fn test_head_only() {
     // Should NOT contain body
     assert!(!stdout.contains("Response body that should not appear"));
 
+    // -I should send a HEAD request, not GET
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.starts_with("HEAD /test"),
+        "Expected HEAD method but got: {}",
+        request
+    );
+
+    server.assert_requests(1);
+}
+
+#[test]
+fn test_head_only_with_explicit_method() {
+    // When -X POST is combined with -I, the explicit method should be preserved
+    let server = TestServerBuilder::new().build();
+    server.on_request_fn("/test", |_req| {
+        ResponseBuilder::new()
+            .status(200)
+            .header("X-Custom-Header", "custom-value")
+            .body("Response body that should not appear")
+            .build()
+    });
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test")).arg("-I").arg("-X").arg("POST");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Should still show headers
+    assert!(
+        stdout.contains("HTTP/1.1 200"),
+        "Expected HTTP/1.1 200 in response"
+    );
+
+    // Should NOT contain body
+    assert!(!stdout.contains("Response body that should not appear"));
+
+    // -X POST should take precedence over -I's implicit HEAD
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.starts_with("POST /test"),
+        "Expected POST method but got: {}",
+        request
+    );
+
     server.assert_requests(1);
 }
 
