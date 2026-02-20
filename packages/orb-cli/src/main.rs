@@ -35,7 +35,7 @@ async fn main() {
     // Spawn background update check (non-blocking)
     update::init();
 
-    let args = cli::Args::parse();
+    let mut args = cli::Args::parse();
 
     let url = Url::parse(&args.url).unwrap_or_else(|err| {
         fatal!("Invalid URL {}", err);
@@ -58,6 +58,11 @@ async fn main() {
         // Handle WebSocket connection
         handle_websocket(&args, &url).await;
         return;
+    }
+
+    // -I/--head implies HEAD method (like curl), unless user explicitly set -X
+    if args.head_only && args.method.0 == http::Method::GET {
+        args.method = cli::HttpMethod(http::Method::HEAD);
     }
 
     // HTTP-only validation
