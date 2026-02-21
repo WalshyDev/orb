@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use http::Version;
 use http::header::{CONTENT_TYPE, HeaderValue};
+use http::{Method, Version};
 use orb_client::body::RequestBody;
 use orb_client::dns::OverrideRule;
 use orb_client::{CertificateDer, PrivateKeyDer, RequestBuilder};
@@ -17,8 +17,17 @@ use crate::verbose_events::VerboseEventHandler;
 
 /// Build the HTTP request based on CLI args
 pub async fn build_request(builder: RequestBuilder, args: &Args, url: &Url) -> RequestBuilder {
+    let mut method = Method::GET;
+    if let Some(ref m) = args.method {
+        method = m.0.clone();
+    } else if args.head_only {
+        method = Method::HEAD;
+    } else if args.data.is_some() {
+        method = Method::POST;
+    }
+
     let mut builder = builder
-        .method(args.method.0.clone())
+        .method(method)
         .follow_redirects(args.follow_redirects)
         .max_redirects(args.max_redirects)
         .connect_timeout(Duration::from_secs(args.connect_timeout))

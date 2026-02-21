@@ -41,13 +41,8 @@ pub struct Args {
     pub url: String,
 
     /// HTTP method to use
-    #[arg(
-        short = 'X',
-        long = "request",
-        value_name = "METHOD",
-        default_value = "GET"
-    )]
-    pub method: HttpMethod,
+    #[arg(short = 'X', long = "request", value_name = "METHOD")]
+    pub method: Option<HttpMethod>,
 
     /// Custom headers (can be used multiple times)
     #[arg(short = 'H', long = "header", value_name = "HEADER")]

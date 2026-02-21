@@ -133,11 +133,7 @@ fn test_data(data: &str, expected_body: &str) {
     server.on_request("/test").respond_with(200, "OK");
 
     let mut cmd = Command::new(cargo_bin!("orb"));
-    cmd.arg(server.url("/test"))
-        .arg("-X")
-        .arg("POST")
-        .arg("-d")
-        .arg(data);
+    cmd.arg(server.url("/test")).arg("-d").arg(data);
 
     let output = cmd.output().unwrap();
     assert!(output.status.success());
@@ -169,6 +165,42 @@ fn test_data_invalid(data: &str, expected_error: &str) {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(normalize_os_error(&stderr), expected_error);
+}
+
+#[test_case("POST", "simple data", "simple data"; "POST simple data")]
+#[test_case("POST", "@tests/testdata/test_data.txt", "This is test data from file"; "POST data from file")]
+#[test_case("PATCH", "simple data", "simple data"; "PATCH simple data")]
+#[test_case("PATCH", "@tests/testdata/test_data.txt", "This is test data from file"; "PATCH data from file")]
+#[test_case("PUT", "simple data", "simple data"; "PUT simple data")]
+#[test_case("PUT", "@tests/testdata/test_data.txt", "This is test data from file"; "PUT data from file")]
+fn test_data_explicit_method(method: &str, data: &str, expected_body: &str) {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test"))
+        .arg("-X")
+        .arg(method)
+        .arg("-d")
+        .arg(data);
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.starts_with(&format!("{} /test", method)),
+        "Expected {} method but got: {}",
+        method,
+        request
+    );
+    assert!(
+        request.contains(expected_body),
+        "Expected body '{}' in request: {}",
+        expected_body,
+        request
+    );
+    server.assert_requests(1);
 }
 
 #[test]
@@ -340,6 +372,58 @@ fn test_head_only() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
 
+    assert_snapshot!(
+        sanitize_output(&stdout),
+        @r"
+    HTTP/1.1 200 OK
+    x-custom-header: custom-value
+    content-length: 36
+    date: <DATE>
+    "
+    );
+
+    // Assert the request was sent as HEAD
+    let request = server.get_raw_request().unwrap();
+    assert_snapshot!(
+        sanitize_output(&request),
+        @r"
+    HEAD /test HTTP/1.1
+    accept: */*
+    user-agent: orb/0.1.0
+    host: 127.0.0.1:<PORT>
+    "
+    );
+
+    server.assert_requests(1);
+}
+
+#[test_case("GET"; "GET")]
+#[test_case("HEAD"; "HEAD")]
+#[test_case("POST"; "POST")]
+#[test_case("PATCH"; "PATCH")]
+#[test_case("PUT"; "PUT")]
+#[test_case("DELETE"; "DELETE")]
+#[test_case("OPTIONS"; "OPTIONS")]
+#[test_case("TRACE"; "TRACE")]
+#[test_case("NON-SPEC-COMPLIANT"; "NON-SPEC-COMPLIANT")]
+fn test_head_only_with_explicit_method(method: &str) {
+    // When -X POST is combined with -I, the explicit method should be preserved
+    let server = TestServerBuilder::new().build();
+    server.on_request_fn("/test", |_req| {
+        ResponseBuilder::new()
+            .status(200)
+            .header("X-Custom-Header", "custom-value")
+            .body("Response body that should not appear")
+            .build()
+    });
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test")).arg("-I").arg("-X").arg(method);
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
     // Should contain headers
     assert!(
         stdout.contains("HTTP/1.1 200"),
@@ -352,6 +436,15 @@ fn test_head_only() {
 
     // Should NOT contain body
     assert!(!stdout.contains("Response body that should not appear"));
+
+    // -X {METHOD} should take precedence over -I's implicit HEAD
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.starts_with(&format!("{} /test", method)),
+        "Expected {} method but got: {}",
+        method,
+        request
+    );
 
     server.assert_requests(1);
 }
