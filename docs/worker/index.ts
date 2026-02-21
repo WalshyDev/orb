@@ -30,6 +30,19 @@ export default {
           'Content-Disposition': `attachment; filename="${binary}"`,
         },
       });
+
+    } else if (pathname === '/update/manifest.json') {
+      const object = await env.R2.get('update/manifest.json');
+
+      if (object === null) {
+        return this.notFound(env);
+      }
+
+      return new Response(object.body, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
     }
 
     return this.notFound(env);
