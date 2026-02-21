@@ -45,7 +45,7 @@ cookie_store = "0.22.0"
 # Auto-update
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.9"
+toml = "1.0"
 semver = "1.0"
 sha2 = "0.10"
 dirs = "6.0"
@@ -53,7 +53,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Multipart
 mime_guess = "2.0"
-uuid = { version = "1.19.0", features = ["v4"] }
+uuid = { version = "1.21.0", features = ["v4"] }
 
 # TTY detection for WebSocket interactive mode
 atty = "0.2"
@@ -66,7 +66,7 @@ tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "io-util"
 assert_cmd = "2.1"
 predicates = "3.1"
 test-case = "3.3.1"
-insta = "1.46.0"
+insta = "1.46.3"
 regex = "1.12.2"
 rcgen = "0.14.7"  # For HTTP/3 test certificate generation
 tempfile = "3.15"  # For temporary cert files in tests
