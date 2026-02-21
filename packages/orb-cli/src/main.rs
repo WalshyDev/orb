@@ -32,10 +32,11 @@ async fn main() {
         eprintln!("* Updated orb to version {}", version);
     }
 
-    // Spawn background update check (non-blocking)
-    update::init();
-
     let args = cli::Args::parse();
+
+    // Spawn background update check (non-blocking)
+    // Must be after arg parsing so the process doesn't exit before the check completes
+    let update_handle = update::init();
 
     let url = Url::parse(&args.url).unwrap_or_else(|err| {
         fatal!("Invalid URL {}", err);
@@ -57,6 +58,7 @@ async fn main() {
 
         // Handle WebSocket connection
         handle_websocket(&args, &url).await;
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), update_handle).await;
         return;
     }
 
@@ -75,4 +77,7 @@ async fn main() {
     let ttfb = start_time.elapsed();
 
     handle_response(response, &args, &url, start_time, ttfb).await;
+
+    // Give the background update check a moment to finish if it hasn't already
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), update_handle).await;
 }

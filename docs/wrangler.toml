@@ -4,6 +4,9 @@ main = "worker/index.ts"
 route = { pattern = "orb-tools.com", custom_domain = true }
 preview_urls = true
 
+[observability]
+enabled = true
+
 [assets]
 directory = "dist"
 binding = "ASSETS"

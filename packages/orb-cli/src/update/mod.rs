@@ -40,12 +40,13 @@ pub enum UpdateError {
 }
 
 /// Initialize the update system - spawns background update check
-/// This function returns immediately and does not block
-pub fn init() {
+/// This function returns immediately and does not block.
+/// Returns a handle that can be awaited to ensure the check completes.
+pub fn init() -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         // Silently handle any errors - update failures should never disrupt the CLI
         let _ = check_and_stage_update().await;
-    });
+    })
 }
 
 /// Apply any pending staged update
