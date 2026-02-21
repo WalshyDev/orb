@@ -4,6 +4,7 @@ use std::io::{self, Write};
 use std::sync::Arc;
 use std::time::Duration;
 
+use http::Method;
 use orb_client::{OrbError, RequestBuilder, WebSocketMessage, WebSocketStream};
 use url::Url;
 
@@ -30,7 +31,7 @@ pub fn is_websocket_url(url: &Url) -> bool {
 /// Returns an error message if an unsupported option is used
 pub fn validate_websocket_options(args: &Args) -> Option<String> {
     // Method must be GET for WebSocket
-    if args.method.0 != http::Method::GET {
+    if args.method.as_ref().is_some_and(|m| m.0 != Method::GET) {
         return Some(
             "WebSocket connections only support GET method. Remove -X/--request option."
                 .to_string(),
