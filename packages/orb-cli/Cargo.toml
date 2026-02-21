@@ -1,6 +1,6 @@
 [package]
 name = "orb-cli"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 authors = ["Daniel Walsh <orb@walshy.dev>"]
 description = "🟠 Your powerful HTTP client - A powerful cURL alternative with HTTP/1.1, HTTP/2, and HTTP/3"
