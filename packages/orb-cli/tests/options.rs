@@ -2269,4 +2269,176 @@ fn test_progress_auto_start() {
     server.assert_requests(2);
 }
 
+/// Test that Authorization header is stripped on cross-host redirect
+#[test]
+fn test_redirect_strips_auth_cross_host() {
+    // Server A: redirects to Server B
+    let server_b = TestServerBuilder::new().build();
+    server_b.on_request_fn("/target", |req| {
+        let has_auth = req.header("authorization").is_some();
+        if has_auth {
+            ResponseBuilder::new()
+                .status(200)
+                .body("FAIL: Authorization header leaked")
+                .build()
+        } else {
+            ResponseBuilder::new()
+                .status(200)
+                .body("OK: no auth header")
+                .build()
+        }
+    });
+
+    let server_a = TestServerBuilder::new().build();
+    let redirect_target = server_b.url("/target");
+    server_a
+        .on_request("/start")
+        .respond_with_redirect(302, &redirect_target);
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server_a.url("/start"))
+        .arg("--bearer")
+        .arg("secret-token")
+        .arg("-L");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "OK: no auth header");
+
+    server_a.assert_requests(1);
+    server_b.assert_requests(1);
+}
+
+/// Test that Authorization header is preserved on same-host redirect
+#[test]
+fn test_redirect_preserves_auth_same_host() {
+    let server = TestServerBuilder::new().build();
+    let final_url = server.url("/final");
+
+    server
+        .on_request("/start")
+        .respond_with_redirect(302, &final_url);
+    server.on_request_fn("/final", |req| {
+        let has_auth = req
+            .header("authorization")
+            .map(|v| v.contains("Bearer secret-token"))
+            .unwrap_or(false);
+        if has_auth {
+            ResponseBuilder::new()
+                .status(200)
+                .body("OK: auth preserved")
+                .build()
+        } else {
+            ResponseBuilder::new()
+                .status(200)
+                .body("FAIL: auth header missing")
+                .build()
+        }
+    });
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/start"))
+        .arg("--bearer")
+        .arg("secret-token")
+        .arg("-L");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "OK: auth preserved");
+
+    server.assert_requests(2);
+}
+
+/// Test that --location-trusted preserves Authorization on cross-host redirect
+#[test]
+fn test_redirect_location_trusted() {
+    let server_b = TestServerBuilder::new().build();
+    server_b.on_request_fn("/target", |req| {
+        let has_auth = req
+            .header("authorization")
+            .map(|v| v.contains("Bearer secret-token"))
+            .unwrap_or(false);
+        if has_auth {
+            ResponseBuilder::new()
+                .status(200)
+                .body("OK: auth preserved with --location-trusted")
+                .build()
+        } else {
+            ResponseBuilder::new()
+                .status(200)
+                .body("FAIL: auth header missing")
+                .build()
+        }
+    });
+
+    let server_a = TestServerBuilder::new().build();
+    let redirect_target = server_b.url("/target");
+    server_a
+        .on_request("/start")
+        .respond_with_redirect(302, &redirect_target);
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server_a.url("/start"))
+        .arg("--bearer")
+        .arg("secret-token")
+        .arg("-L")
+        .arg("--location-trusted");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "OK: auth preserved with --location-trusted");
+
+    server_a.assert_requests(1);
+    server_b.assert_requests(1);
+}
+
+/// Test that non-sensitive headers are preserved on cross-host redirect
+#[test]
+fn test_redirect_preserves_non_sensitive_headers_cross_host() {
+    let server_b = TestServerBuilder::new().build();
+    server_b.on_request_fn("/target", |req| {
+        let has_custom = req
+            .header("x-custom")
+            .map(|v| v == "keep-me")
+            .unwrap_or(false);
+        let has_auth = req.header("authorization").is_some();
+        if has_custom && !has_auth {
+            ResponseBuilder::new()
+                .status(200)
+                .body("OK: custom header preserved, auth stripped")
+                .build()
+        } else {
+            ResponseBuilder::new()
+                .status(200)
+                .body(format!("FAIL: custom={}, auth={}", has_custom, has_auth))
+                .build()
+        }
+    });
+
+    let server_a = TestServerBuilder::new().build();
+    let redirect_target = server_b.url("/target");
+    server_a
+        .on_request("/start")
+        .respond_with_redirect(302, &redirect_target);
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server_a.url("/start"))
+        .arg("-H")
+        .arg("X-Custom: keep-me")
+        .arg("--bearer")
+        .arg("secret-token")
+        .arg("-L");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "OK: custom header preserved, auth stripped");
+
+    server_a.assert_requests(1);
+    server_b.assert_requests(1);
+}
+
 // fn test_ws_message
