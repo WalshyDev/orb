@@ -129,6 +129,27 @@ Orb follows these redirect status codes:
 Be careful with redirects when posting data. Some redirects may change the method or drop the body.
 </Aside>
 
+### Cross-Host Redirect Security
+
+When following redirects to a **different host**, orb automatically strips the `Authorization` header to prevent credential leakage.
+
+This protects against attacks where a malicious server redirects to a different host to steal credentials (see [CVE-2018-1000007](https://curl.se/docs/CVE-2018-1000007.html)).
+
+Redirects to the **same host** (same scheme, hostname, and port) preserve all headers.
+
+#### `--location-trusted`
+
+If you trust the redirect target and need to send credentials across hosts, use `--location-trusted`:
+
+```bash
+# Sends Authorization header even on cross-host redirects
+orb -L --location-trusted --bearer my-token https://auth.example.com/login
+```
+
+<Aside type="caution">
+Only use `--location-trusted` when you trust all servers in the redirect chain. Without it, your credentials are protected from being sent to unexpected hosts.
+</Aside>
+
 ### Redirect Loop Protection
 
 Orb detects redirect loops and stops:

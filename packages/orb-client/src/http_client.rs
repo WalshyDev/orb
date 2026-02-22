@@ -282,7 +282,7 @@ impl HttpClient {
                 .map_err(|_| OrbError::InvalidRedirectLocation)?
                 .trim();
 
-            let new_uri = Self::resolve_redirect_uri(&current_uri, location_str)?;
+            let new_uri = resolve_redirect_uri(&current_uri, location_str)?;
 
             // 307/308: Preserve method and body
             // 301/302/303: Change to GET with no body
@@ -291,10 +291,18 @@ impl HttpClient {
                 _ => (Method::GET, RequestBody::Empty),
             };
 
-            let mut req_builder = Request::builder().method(method).uri(new_uri);
+            let mut req_builder = Request::builder().method(method).uri(new_uri.clone());
+
+            // Determine headers for redirect request
+            let redirect_headers =
+                if !builder.location_trusted && is_cross_host(&current_uri, &new_uri) {
+                    strip_sensitive_headers(&builder.headers)
+                } else {
+                    builder.headers.clone()
+                };
 
             // Copy headers (except Host which hyper handles)
-            for (key, value) in builder.headers.iter() {
+            for (key, value) in redirect_headers.iter() {
                 if key != http::header::HOST {
                     req_builder = req_builder.header(key, value);
                 }
@@ -356,28 +364,6 @@ impl HttpClient {
 
         OrbError::Request(format!("{}", error))
     }
-
-    fn resolve_redirect_uri(current: &http::Uri, location: &str) -> Result<http::Uri, OrbError> {
-        if location.starts_with("http://") || location.starts_with("https://") {
-            location
-                .parse()
-                .map_err(|_| OrbError::InvalidRedirectLocation)
-        } else if location.starts_with('/') {
-            let scheme = current.scheme_str().unwrap_or("https");
-            let authority = current.authority().map(|a| a.as_str()).unwrap_or("");
-            format!("{}://{}{}", scheme, authority, location)
-                .parse()
-                .map_err(|_| OrbError::InvalidRedirectLocation)
-        } else {
-            let scheme = current.scheme_str().unwrap_or("https");
-            let authority = current.authority().map(|a| a.as_str()).unwrap_or("");
-            let current_path = current.path();
-            let base_path = current_path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
-            format!("{}://{}{}/{}", scheme, authority, base_path, location)
-                .parse()
-                .map_err(|_| OrbError::InvalidRedirectLocation)
-        }
-    }
 }
 
 impl Default for HttpClient {
@@ -395,6 +381,7 @@ pub struct RequestBuilder {
     pub(crate) body: RequestBody,
     pub(crate) follow_redirects: bool,
     pub(crate) max_redirects: usize,
+    pub(crate) location_trusted: bool,
     pub(crate) connect_timeout: Option<Duration>,
     pub(crate) max_time: Option<Duration>,
     pub(crate) insecure: bool,
@@ -415,6 +402,7 @@ impl RequestBuilder {
             body: RequestBody::empty(),
             follow_redirects: false,
             max_redirects: 10,
+            location_trusted: false,
             connect_timeout: None,
             max_time: None,
             insecure: false,
@@ -468,6 +456,11 @@ impl RequestBuilder {
 
     pub fn max_redirects(mut self, max: usize) -> Self {
         self.max_redirects = max;
+        self
+    }
+
+    pub fn location_trusted(mut self, trusted: bool) -> Self {
+        self.location_trusted = trusted;
         self
     }
 
@@ -646,4 +639,65 @@ fn boxed_empty() -> BoxBody {
 
 fn boxed_full(bytes: Bytes) -> BoxBody {
     Full::new(bytes).map_err(|_| unreachable!()).boxed()
+}
+
+/// Check if two URIs point to different hosts (scheme + host + port)
+fn is_cross_host(original: &http::Uri, redirect: &http::Uri) -> bool {
+    let orig_scheme = original.scheme_str().unwrap_or("https");
+    let redir_scheme = redirect.scheme_str().unwrap_or("https");
+
+    if orig_scheme != redir_scheme {
+        return true;
+    }
+
+    let orig_host = original.host().unwrap_or("");
+    let redir_host = redirect.host().unwrap_or("");
+
+    if !orig_host.eq_ignore_ascii_case(redir_host) {
+        return true;
+    }
+
+    let default_port = if orig_scheme == "https" { 443 } else { 80 };
+    let orig_port = original.port_u16().unwrap_or(default_port);
+    let redir_port = redirect.port_u16().unwrap_or(default_port);
+
+    orig_port != redir_port
+}
+
+/// Clone headers but remove the Authorization header
+fn strip_sensitive_headers(headers: &HeaderMap) -> HeaderMap {
+    let mut filtered = HeaderMap::new();
+    for (key, value) in headers.iter() {
+        if key == http::header::AUTHORIZATION {
+            continue;
+        }
+        filtered.append(key.clone(), value.clone());
+    }
+    filtered
+}
+
+/// Resolve a redirect Location header into an absolute URI
+pub(crate) fn resolve_redirect_uri(
+    current: &http::Uri,
+    location: &str,
+) -> Result<http::Uri, OrbError> {
+    if location.starts_with("http://") || location.starts_with("https://") {
+        location
+            .parse()
+            .map_err(|_| OrbError::InvalidRedirectLocation)
+    } else if location.starts_with('/') {
+        let scheme = current.scheme_str().unwrap_or("https");
+        let authority = current.authority().map(|a| a.as_str()).unwrap_or("");
+        format!("{}://{}{}", scheme, authority, location)
+            .parse()
+            .map_err(|_| OrbError::InvalidRedirectLocation)
+    } else {
+        let scheme = current.scheme_str().unwrap_or("https");
+        let authority = current.authority().map(|a| a.as_str()).unwrap_or("");
+        let current_path = current.path();
+        let base_path = current_path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
+        format!("{}://{}{}/{}", scheme, authority, base_path, location)
+            .parse()
+            .map_err(|_| OrbError::InvalidRedirectLocation)
+    }
 }

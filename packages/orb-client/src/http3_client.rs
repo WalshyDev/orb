@@ -15,12 +15,16 @@ use crate::body::{RequestBody, ResponseBody};
 use crate::dns::{apply_dns_overrides, resolve_address};
 use crate::error::OrbError;
 use crate::events::ClientEvent;
-use crate::http_client::RequestBuilder;
+use http::header::HeaderMap;
+
+use crate::http_client::{RequestBuilder, resolve_redirect_uri};
 use crate::tls::build_client_tls_config;
 
-/// Send an HTTP/3 request
-pub async fn send_http3_request(builder: RequestBuilder) -> Result<Response, OrbError> {
-    let url = &builder.url;
+/// Establish a QUIC connection and create an HTTP/3 session
+async fn connect_h3(
+    builder: &RequestBuilder,
+    url: &url::Url,
+) -> Result<SendRequest<OpenStreams, Bytes>, OrbError> {
     let host = url
         .host_str()
         .ok_or_else(|| OrbError::QuicConnect("No host in URL".to_string()))?;
@@ -126,28 +130,97 @@ pub async fn send_http3_request(builder: RequestBuilder) -> Result<Response, Orb
 
     // Drive the connection in the background
     tokio::spawn(async move {
-        // poll_close polls until connection closes
         let _ = futures_util::future::poll_fn(|cx| driver.poll_close(cx)).await;
     });
 
-    // Send the request
-    send_request_h3(send_request, &builder).await
+    Ok(send_request)
 }
 
-async fn send_request_h3(
+/// Send an HTTP/3 request with redirect handling
+pub async fn send_http3_request(builder: RequestBuilder) -> Result<Response, OrbError> {
+    let mut current_url = builder.url.clone();
+    let mut current_method = builder.method.clone();
+    let mut current_body = builder.body.clone();
+    let mut current_headers = builder.headers.clone();
+    let mut redirect_count = 0;
+
+    loop {
+        let send_request = connect_h3(&builder, &current_url).await?;
+        let response = send_single_h3_request(
+            send_request,
+            &builder,
+            &current_url,
+            &current_method,
+            &current_body,
+            &current_headers,
+        )
+        .await?;
+
+        if !response.status.is_redirection() || !builder.follow_redirects {
+            return Ok(response);
+        }
+
+        redirect_count += 1;
+        if redirect_count > builder.max_redirects {
+            return Err(OrbError::TooManyRedirects {
+                count: builder.max_redirects,
+                url: current_url.to_string(),
+            });
+        }
+
+        let location = response
+            .headers
+            .get(http::header::LOCATION)
+            .ok_or(OrbError::MissingRedirectLocation)?;
+
+        let location_str = location
+            .to_str()
+            .map_err(|_| OrbError::InvalidRedirectLocation)?
+            .trim();
+
+        let current_uri: http::Uri = current_url
+            .as_str()
+            .parse()
+            .map_err(|_| OrbError::InvalidRedirectLocation)?;
+        let new_uri = resolve_redirect_uri(&current_uri, location_str)?;
+
+        // Strip sensitive headers on cross-host redirects unless --location-trusted
+        if !builder.location_trusted && is_cross_host_h3(&current_uri, &new_uri) {
+            current_headers = strip_sensitive_headers_h3(&current_headers);
+        }
+
+        current_url =
+            url::Url::parse(&new_uri.to_string()).map_err(|_| OrbError::InvalidRedirectLocation)?;
+
+        // 307/308: Preserve method and body
+        // 301/302/303: Change to GET with no body
+        match response.status.as_u16() {
+            307 | 308 => {}
+            _ => {
+                current_method = http::Method::GET;
+                current_body = RequestBody::Empty;
+            }
+        }
+    }
+}
+
+async fn send_single_h3_request(
     mut send_request: SendRequest<OpenStreams, Bytes>,
     builder: &RequestBuilder,
+    url: &url::Url,
+    method: &http::Method,
+    body: &RequestBody,
+    headers: &HeaderMap,
 ) -> Result<Response, OrbError> {
-    let uri: http::Uri = builder
-        .url
+    let uri: http::Uri = url
         .as_str()
         .parse()
         .map_err(|e: http::uri::InvalidUri| OrbError::RequestBuild(e.to_string()))?;
 
     // Build the request
-    let mut req_builder = Request::builder().uri(uri).method(builder.method.clone());
+    let mut req_builder = Request::builder().uri(uri).method(method.clone());
 
-    for (key, value) in builder.headers.iter() {
+    for (key, value) in headers.iter() {
         // Skip Host header - h3 uses :authority pseudo-header from the URI
         if key == http::header::HOST {
             continue;
@@ -161,14 +234,13 @@ async fn send_request_h3(
 
     // Emit RequestSent event
     if let Some(ref handler) = builder.event_handler {
-        let headers: Vec<(String, String)> = builder
-            .headers
+        let headers: Vec<(String, String)> = headers
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("<binary>").to_string()))
             .collect();
         handler.on_event(ClientEvent::RequestSent {
-            method: builder.method.to_string(),
-            path: builder.url.path().to_string(),
+            method: method.to_string(),
+            path: url.path().to_string(),
             headers,
         });
     }
@@ -182,7 +254,7 @@ async fn send_request_h3(
         .map_err(|e| OrbError::Http3Protocol(e.to_string()))?;
 
     // Send body if present
-    match &builder.body {
+    match body {
         RequestBody::Empty => {
             stream
                 .finish()
@@ -247,4 +319,39 @@ async fn send_request_h3(
         response_body,
         content_length,
     ))
+}
+
+/// Check if two URIs point to different hosts (scheme + host + port)
+fn is_cross_host_h3(original: &http::Uri, redirect: &http::Uri) -> bool {
+    let orig_scheme = original.scheme_str().unwrap_or("https");
+    let redir_scheme = redirect.scheme_str().unwrap_or("https");
+
+    if orig_scheme != redir_scheme {
+        return true;
+    }
+
+    let orig_host = original.host().unwrap_or("");
+    let redir_host = redirect.host().unwrap_or("");
+
+    if !orig_host.eq_ignore_ascii_case(redir_host) {
+        return true;
+    }
+
+    let default_port = if orig_scheme == "https" { 443 } else { 80 };
+    let orig_port = original.port_u16().unwrap_or(default_port);
+    let redir_port = redirect.port_u16().unwrap_or(default_port);
+
+    orig_port != redir_port
+}
+
+/// Clone headers but remove the Authorization header
+fn strip_sensitive_headers_h3(headers: &HeaderMap) -> HeaderMap {
+    let mut filtered = HeaderMap::new();
+    for (key, value) in headers.iter() {
+        if key == http::header::AUTHORIZATION {
+            continue;
+        }
+        filtered.append(key.clone(), value.clone());
+    }
+    filtered
 }

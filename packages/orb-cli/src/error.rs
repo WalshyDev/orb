@@ -119,6 +119,9 @@ pub fn handle_request_error(err: OrbError, args: &Args) -> ! {
                 args.url
             );
         }
+        OrbError::MissingRedirectLocation => {
+            silent_fatal!(args.silent, "Redirect response missing Location header");
+        }
         _ => {
             if !args.silent {
                 eprintln!("Error: {:?}", err);
