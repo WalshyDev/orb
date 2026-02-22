@@ -1,5 +1,6 @@
 # Ensure consistent line endings across platforms
 * text=auto
+* text eol=lf
 
 # Test data files should preserve their line endings exactly
 packages/orb-cli/tests/testdata/*.txt text eol=lf
