@@ -83,6 +83,7 @@ orb [OPTIONS] <URL>
 | `-m, --max-time <SECS>` | Maximum total request time in seconds |
 | `-L, --location` | Follow redirects |
 | `--max-redirs <NUM>` | Maximum redirects to follow. Default: 10 |
+| `--location-trusted` | Send Authorization header to different hosts on redirect |
 
 ## Network
 
@@ -301,6 +302,14 @@ Follow redirects:
 ```bash
 orb -L https://httpbin.org/redirect/3
 orb -L --max-redirs 5 https://example.com
+```
+
+### `--location-trusted`
+
+By default, the `Authorization` header is stripped when a redirect goes to a different host. Use `--location-trusted` to preserve it:
+
+```bash
+orb -L --location-trusted --bearer token https://auth.example.com/login
 ```
 
 ### `-x, --proxy`

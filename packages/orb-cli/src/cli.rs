@@ -88,6 +88,14 @@ pub struct Args {
     #[arg(long = "max-redirs", value_name = "NUM", default_value = "10")]
     pub max_redirects: usize,
 
+    /// Send auth headers to hosts that differ from the original (on redirect)
+    ///
+    /// By default, the Authorization header is stripped when following redirects
+    /// to a different host. This flag preserves it regardless of the redirect
+    /// target.
+    #[arg(long = "location-trusted")]
+    pub location_trusted: bool,
+
     /// Connection timeout in seconds
     #[arg(long = "connect-timeout", value_name = "SECONDS", default_value = "10")]
     pub connect_timeout: u64,
