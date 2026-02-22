@@ -30,6 +30,7 @@ pub async fn build_request(builder: RequestBuilder, args: &Args, url: &Url) -> R
         .method(method)
         .follow_redirects(args.follow_redirects)
         .max_redirects(args.max_redirects)
+        .location_trusted(args.location_trusted)
         .connect_timeout(Duration::from_secs(args.connect_timeout))
         .insecure(args.insecure)
         .use_system_cert_store(true)
