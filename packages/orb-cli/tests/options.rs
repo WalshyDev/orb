@@ -148,6 +148,96 @@ fn test_data(data: &str, expected_body: &str) {
     server.assert_requests(1);
 }
 
+#[test_case("-d", "foo=bar"; "data defaults to POST")]
+#[test_case("--json", r#"{"key":"value"}"#; "json defaults to POST")]
+fn test_body_flag_defaults_to_post(flag: &str, value: &str) {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test")).arg(flag).arg(value);
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.starts_with("POST /test"),
+        "Expected POST method but got: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
+#[test]
+fn test_form_defaults_to_post() {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test")).arg("-F").arg("field1=value1");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.starts_with("POST /test"),
+        "Expected POST method but got: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
+#[test_case("-d", "foo=bar"; "data with explicit GET")]
+#[test_case("--json", r#"{"key":"value"}"#; "json with explicit GET")]
+fn test_explicit_method_overrides_body_flag(flag: &str, value: &str) {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test"))
+        .arg("-X")
+        .arg("GET")
+        .arg(flag)
+        .arg(value);
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.starts_with("GET /test"),
+        "Expected GET method but got: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
+#[test]
+fn test_explicit_method_overrides_form() {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test"))
+        .arg("-X")
+        .arg("PUT")
+        .arg("-F")
+        .arg("field1=value1");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.starts_with("PUT /test"),
+        "Expected PUT method but got: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
 #[test_case(
     "@tests/testdata/does-not-exist.txt",
     "Failed to read data from file 'tests/testdata/does-not-exist.txt': No such file or directory (os error 2)\n";

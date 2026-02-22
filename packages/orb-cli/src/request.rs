@@ -22,7 +22,7 @@ pub async fn build_request(builder: RequestBuilder, args: &Args, url: &Url) -> R
         method = m.0.clone();
     } else if args.head_only {
         method = Method::HEAD;
-    } else if args.data.is_some() {
+    } else if args.data.is_some() || args.json.is_some() || !args.form.is_empty() {
         method = Method::POST;
     }
 
