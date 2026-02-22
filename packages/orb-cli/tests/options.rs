@@ -1083,6 +1083,32 @@ fn test_redirect_preserves_headers() {
 }
 
 #[test]
+fn test_redirect_without_location_header() {
+    let server = TestServerBuilder::new().build();
+
+    server.on_request_fn("/redirect", |_req| {
+        ResponseBuilder::new()
+            .status(302)
+            .body("Redirecting...")
+            .build()
+    });
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/redirect")).arg("-L");
+
+    let output = cmd.output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    let error_count = stderr.matches("missing").count() + stderr.matches("Missing").count();
+    assert_eq!(
+        error_count, 1,
+        "BUG: Error printed {} times instead of 1:\n{}",
+        error_count, stderr
+    );
+}
+
+#[test]
 fn test_connect_timeout() {
     // Use a non-routable address to test timeout behavior
     let mut cmd = Command::new(cargo_bin!("orb"));
@@ -1547,6 +1573,45 @@ fn test_http3_with_body() {
         stdout
     );
     server.assert_requests(1);
+}
+
+#[test]
+fn test_http3_follows_redirects() {
+    let server = TestServerBuilder::new()
+        .with_protocols(&[HttpProtocol::Http3])
+        .build();
+
+    server
+        .on_request("/redirect")
+        .respond_with_redirect(302, "/final");
+    server
+        .on_request("/final")
+        .respond_with(200, "Final destination");
+
+    let output = Command::new(cargo_bin!("orb"))
+        .arg(server.url("/redirect"))
+        .arg("--http3")
+        .arg("--insecure")
+        .arg("--max-time")
+        .arg("10")
+        .arg("-L")
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "HTTP/3 redirect failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Final destination"),
+        "Expected final response after redirect, got: {}",
+        stdout
+    );
+
+    server.assert_requests(2);
 }
 
 // Test HTTP/3 against a server that doesn't support it
