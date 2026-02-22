@@ -282,7 +282,7 @@ impl HttpClient {
                 .map_err(|_| OrbError::InvalidRedirectLocation)?
                 .trim();
 
-            let new_uri = Self::resolve_redirect_uri(&current_uri, location_str)?;
+            let new_uri = resolve_redirect_uri(&current_uri, location_str)?;
 
             // 307/308: Preserve method and body
             // 301/302/303: Change to GET with no body
@@ -355,28 +355,6 @@ impl HttpClient {
         }
 
         OrbError::Request(format!("{}", error))
-    }
-
-    fn resolve_redirect_uri(current: &http::Uri, location: &str) -> Result<http::Uri, OrbError> {
-        if location.starts_with("http://") || location.starts_with("https://") {
-            location
-                .parse()
-                .map_err(|_| OrbError::InvalidRedirectLocation)
-        } else if location.starts_with('/') {
-            let scheme = current.scheme_str().unwrap_or("https");
-            let authority = current.authority().map(|a| a.as_str()).unwrap_or("");
-            format!("{}://{}{}", scheme, authority, location)
-                .parse()
-                .map_err(|_| OrbError::InvalidRedirectLocation)
-        } else {
-            let scheme = current.scheme_str().unwrap_or("https");
-            let authority = current.authority().map(|a| a.as_str()).unwrap_or("");
-            let current_path = current.path();
-            let base_path = current_path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
-            format!("{}://{}{}/{}", scheme, authority, base_path, location)
-                .parse()
-                .map_err(|_| OrbError::InvalidRedirectLocation)
-        }
     }
 }
 
@@ -646,4 +624,30 @@ fn boxed_empty() -> BoxBody {
 
 fn boxed_full(bytes: Bytes) -> BoxBody {
     Full::new(bytes).map_err(|_| unreachable!()).boxed()
+}
+
+/// Resolve a redirect Location header into an absolute URI
+pub(crate) fn resolve_redirect_uri(
+    current: &http::Uri,
+    location: &str,
+) -> Result<http::Uri, OrbError> {
+    if location.starts_with("http://") || location.starts_with("https://") {
+        location
+            .parse()
+            .map_err(|_| OrbError::InvalidRedirectLocation)
+    } else if location.starts_with('/') {
+        let scheme = current.scheme_str().unwrap_or("https");
+        let authority = current.authority().map(|a| a.as_str()).unwrap_or("");
+        format!("{}://{}{}", scheme, authority, location)
+            .parse()
+            .map_err(|_| OrbError::InvalidRedirectLocation)
+    } else {
+        let scheme = current.scheme_str().unwrap_or("https");
+        let authority = current.authority().map(|a| a.as_str()).unwrap_or("");
+        let current_path = current.path();
+        let base_path = current_path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
+        format!("{}://{}{}/{}", scheme, authority, base_path, location)
+            .parse()
+            .map_err(|_| OrbError::InvalidRedirectLocation)
+    }
 }
