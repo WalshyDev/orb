@@ -1464,6 +1464,7 @@ dependencies = [
  "orb-mockhttp",
  "pin-project-lite",
  "predicates",
+ "psl",
  "quinn",
  "rcgen",
  "regex",
@@ -1693,6 +1694,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "psl"
+version = "2.1.195"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bd5cbe0eeb605e2029aa8bd29e17ae797c156705dc515e4db22c3d69f7126d9"
+dependencies = [
+ "psl-types",
 ]
 
 [[package]]

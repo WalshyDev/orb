@@ -1,5 +1,6 @@
 use http::Uri;
 use http::header::{HeaderMap, SET_COOKIE};
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::RwLock;
 
@@ -48,44 +49,51 @@ impl CookieJar {
 
     /// Store cookies from Set-Cookie response headers
     pub fn store_response_cookies(&self, headers: &HeaderMap, uri: &Uri) {
-        let host = uri.host().unwrap_or("");
+        let Some(host) = normalize_host(uri.host().unwrap_or("")) else {
+            return;
+        };
         let path = uri.path();
 
         let mut cookies = self.cookies.write().unwrap_or_else(|e| e.into_inner());
+        let mut stored_any = false;
 
         for cookie_header in headers.get_all(SET_COOKIE) {
             if let Ok(cookie_str) = cookie_header.to_str() {
-                if let Some((name_value, _rest)) = cookie_str.split_once(';') {
-                    if let Some((name, value)) = name_value.split_once('=') {
-                        // Parse attributes (simplified)
-                        let secure = cookie_str.to_lowercase().contains("secure");
-                        let cookie_path = extract_cookie_attr(cookie_str, "path")
-                            .unwrap_or_else(|| path.to_string());
-                        let cookie_domain = extract_cookie_attr(cookie_str, "domain")
-                            .unwrap_or_else(|| host.to_string());
+                let Some((name, value)) = cookie_str
+                    .split(';')
+                    .next()
+                    .and_then(|name_value| name_value.split_once('='))
+                else {
+                    continue;
+                };
 
-                        cookies.push(StoredCookie {
-                            domain: cookie_domain,
-                            path: cookie_path,
-                            secure,
-                            name: name.trim().to_string(),
-                            value: value.trim().to_string(),
-                        });
-                    }
-                } else if let Some((name, value)) = cookie_str.split_once('=') {
-                    // Simple cookie without attributes
-                    cookies.push(StoredCookie {
-                        domain: host.to_string(),
-                        path: path.to_string(),
-                        secure: false,
-                        name: name.trim().to_string(),
-                        value: value.trim().to_string(),
-                    });
+                let Some(cookie_domain) = derive_cookie_domain(&host, cookie_str) else {
+                    continue;
+                };
+
+                let secure = has_secure_attr(cookie_str);
+                let cookie_path = extract_cookie_attr(cookie_str, "path")
+                    .filter(|p| !p.trim().is_empty())
+                    .unwrap_or_else(|| path.to_string());
+
+                if name.trim().is_empty() {
+                    continue;
                 }
+
+                cookies.push(StoredCookie {
+                    domain: cookie_domain,
+                    path: cookie_path,
+                    secure,
+                    name: name.trim().to_string(),
+                    value: value.trim().to_string(),
+                });
+                stored_any = true;
             }
         }
 
-        *self.modified.write().unwrap_or_else(|e| e.into_inner()) = true;
+        if stored_any {
+            *self.modified.write().unwrap_or_else(|e| e.into_inner()) = true;
+        }
     }
 
     /// Save cookies to file (called on drop if file_path is set)
@@ -147,6 +155,55 @@ fn extract_cookie_attr(cookie_str: &str, attr: &str) -> Option<String> {
     None
 }
 
+fn has_secure_attr(cookie_str: &str) -> bool {
+    cookie_str
+        .split(';')
+        .skip(1)
+        .any(|part| part.trim().eq_ignore_ascii_case("secure"))
+}
+
+fn normalize_host(host: &str) -> Option<String> {
+    let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
+    if host.is_empty() { None } else { Some(host) }
+}
+
+fn is_domain_match(host: &str, domain: &str) -> bool {
+    host == domain || host.ends_with(&format!(".{}", domain))
+}
+
+fn derive_cookie_domain(host: &str, cookie_str: &str) -> Option<String> {
+    let domain_attr = extract_cookie_attr(cookie_str, "domain");
+    let Some(raw_domain) = domain_attr else {
+        return Some(host.to_string()); // host-only cookie
+    };
+
+    let domain = raw_domain
+        .trim()
+        .trim_start_matches('.')
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+
+    if domain.is_empty() {
+        return None;
+    }
+
+    // Domain attribute cookies are only valid for DNS hostnames.
+    if host.parse::<IpAddr>().is_ok() || domain.parse::<IpAddr>().is_ok() {
+        return None;
+    }
+
+    // Response origin must domain-match the requested cookie domain.
+    if !is_domain_match(host, &domain) {
+        return None;
+    }
+
+    // Reject public suffixes (e.g. ".com", ".co.uk").
+    psl::domain_str(&domain)?;
+
+    // Domain cookies apply to subdomains as well.
+    Some(format!(".{}", domain))
+}
+
 /// Parse a line from Netscape cookie file format
 /// Format: domain\tflag\tpath\tsecure\texpiry\tname\tvalue
 fn parse_netscape_cookie_line(line: &str) -> Option<StoredCookie> {
@@ -155,7 +212,11 @@ fn parse_netscape_cookie_line(line: &str) -> Option<StoredCookie> {
         return None;
     }
 
-    let domain = parts[0].to_string();
+    let mut domain = parts[0].to_string();
+    let domain_flag = parts[1] == "TRUE";
+    if domain_flag && !domain.starts_with('.') {
+        domain = format!(".{}", domain);
+    }
     let path = parts[2].to_string();
     let secure = parts[3] == "TRUE";
     let name = parts[5].to_string();
@@ -168,4 +229,118 @@ fn parse_netscape_cookie_line(line: &str) -> Option<StoredCookie> {
         name,
         value,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http::HeaderValue;
+
+    fn headers_with_set_cookie(cookie: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(SET_COOKIE, HeaderValue::from_str(cookie).unwrap());
+        headers
+    }
+
+    fn stored_domains(jar: &CookieJar) -> Vec<String> {
+        jar.cookies
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .map(|c| c.domain.clone())
+            .collect::<Vec<_>>()
+    }
+
+    #[test]
+    fn test_store_host_only_cookie_uses_origin_host() {
+        let jar = CookieJar::new(None);
+        let uri: Uri = "http://sub.example.com/test".parse().unwrap();
+        let headers = headers_with_set_cookie("session=abc; Path=/");
+
+        jar.store_response_cookies(&headers, &uri);
+
+        assert_eq!(stored_domains(&jar), vec!["sub.example.com"]);
+    }
+
+    #[test]
+    fn test_store_domain_cookie_for_parent_domain() {
+        let jar = CookieJar::new(None);
+        let uri: Uri = "http://sub.example.com/test".parse().unwrap();
+        let headers = headers_with_set_cookie("session=abc; Domain=.example.com; Path=/");
+
+        jar.store_response_cookies(&headers, &uri);
+
+        assert_eq!(stored_domains(&jar), vec![".example.com"]);
+    }
+
+    #[test]
+    fn test_reject_domain_cookie_for_unrelated_domain() {
+        let jar = CookieJar::new(None);
+        let uri: Uri = "http://attacker.com/test".parse().unwrap();
+        let headers = headers_with_set_cookie("session=abc; Domain=.example.com; Path=/");
+
+        jar.store_response_cookies(&headers, &uri);
+
+        assert!(stored_domains(&jar).is_empty());
+    }
+
+    #[test]
+    fn test_reject_domain_cookie_for_public_suffix() {
+        let jar = CookieJar::new(None);
+        let uri: Uri = "http://example.com/test".parse().unwrap();
+        let headers = headers_with_set_cookie("session=abc; Domain=.com; Path=/");
+
+        jar.store_response_cookies(&headers, &uri);
+
+        assert!(stored_domains(&jar).is_empty());
+    }
+
+    #[test]
+    fn test_reject_domain_cookie_for_mixed_case_public_suffix() {
+        let jar = CookieJar::new(None);
+        let uri: Uri = "http://curl.co.uk/test".parse().unwrap();
+        let headers = headers_with_set_cookie("session=abc; Domain=Co.UK; Path=/");
+
+        jar.store_response_cookies(&headers, &uri);
+
+        assert!(stored_domains(&jar).is_empty());
+    }
+
+    #[test]
+    fn test_reject_domain_cookie_for_ip_host() {
+        let jar = CookieJar::new(None);
+        let uri: Uri = "http://127.0.0.1/test".parse().unwrap();
+        let headers = headers_with_set_cookie("session=abc; Domain=.example.com; Path=/");
+
+        jar.store_response_cookies(&headers, &uri);
+
+        assert!(stored_domains(&jar).is_empty());
+    }
+
+    #[test]
+    fn test_reject_ip_address_domain_attribute() {
+        let jar = CookieJar::new(None);
+        let uri: Uri = "http://example.com/test".parse().unwrap();
+        let headers = headers_with_set_cookie("session=abc; Domain=127.0.0.1; Path=/");
+
+        jar.store_response_cookies(&headers, &uri);
+
+        assert!(stored_domains(&jar).is_empty());
+    }
+
+    #[test]
+    fn test_parse_netscape_cookie_line_honors_domain_flag() {
+        let cookie =
+            parse_netscape_cookie_line("example.com\tTRUE\t/\tFALSE\t0\tsession\tabc123").unwrap();
+
+        assert_eq!(cookie.domain, ".example.com");
+    }
+
+    #[test]
+    fn test_parse_netscape_cookie_line_with_long_value() {
+        let long_value = "x".repeat(20_000);
+        let line = format!(".example.com\tTRUE\t/\tFALSE\t0\tsession\t{}", long_value);
+        let cookie = parse_netscape_cookie_line(&line).unwrap();
+        assert_eq!(cookie.value.len(), 20_000);
+    }
 }

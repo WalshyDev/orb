@@ -4,8 +4,10 @@ use assert_cmd::cargo::*;
 use async_compression::tokio::bufread::{BrotliEncoder, DeflateEncoder, GzipEncoder, ZstdEncoder};
 use insta::{allow_duplicates, assert_snapshot};
 use orb_mockhttp::{HttpProtocol, ResponseBuilder, TestServerBuilder};
+use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
+use tempfile::tempdir;
 use test_case::test_case;
 use testutils::{normalize_os_error, null_device, parse_args, sanitize_error, sanitize_output};
 use tokio::io::AsyncReadExt;
@@ -1930,6 +1932,90 @@ fn test_cookie_from_file() {
     server.assert_requests(1);
 }
 
+#[test]
+fn test_cookie_from_file_rejects_public_suffix_domain_cookie() {
+    let server = TestServerBuilder::new().build();
+    let port = server.port();
+    server.on_request_fn("/test", |req| {
+        let has_cookie = req.headers().get("cookie").is_some();
+        if has_cookie {
+            ResponseBuilder::new().status(200).body("LEAKED").build()
+        } else {
+            ResponseBuilder::new().status(200).body("CLEAN").build()
+        }
+    });
+
+    let tmp = tempdir().unwrap();
+    let cookie_file = tmp.path().join("cookies.txt");
+    std::fs::write(
+        &cookie_file,
+        "# Netscape HTTP Cookie File\n.com\tTRUE\t/\tFALSE\t0\tsession\tevil\n",
+    )
+    .unwrap();
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(format!("http://other.com:{}/test", port))
+        .arg("-b")
+        .arg(format!("@{}", cookie_file.display()))
+        .arg("--connect-to")
+        .arg(format!("other.com:{}:127.0.0.1:{}", port, port));
+
+    let output = cmd.output().unwrap();
+    assert!(
+        output.status.success(),
+        "Command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "CLEAN");
+
+    server.assert_requests(1);
+}
+
+#[test]
+fn test_cookie_from_file_handles_very_long_line() {
+    let server = TestServerBuilder::new().build();
+    let port = server.port();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let long_value = "x".repeat(12_000);
+    let tmp = tempdir().unwrap();
+    let cookie_file = tmp.path().join("cookies.txt");
+    std::fs::write(
+        &cookie_file,
+        format!(
+            "# Netscape HTTP Cookie File\n.example.com\tTRUE\t/\tFALSE\t0\tsession\t{}\n",
+            long_value
+        ),
+    )
+    .unwrap();
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(format!("http://example.com:{}/test", port))
+        .arg("-b")
+        .arg(format!("@{}", cookie_file.display()))
+        .arg("--connect-to")
+        .arg(format!("example.com:{}:127.0.0.1:{}", port, port));
+
+    let output = cmd.output().unwrap();
+    assert!(
+        output.status.success(),
+        "Command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.contains("cookie: session="),
+        "Expected cookie header in request"
+    );
+    assert!(
+        request.contains(&format!("session={}", &long_value[..128])),
+        "Expected long cookie value prefix in request"
+    );
+
+    server.assert_requests(1);
+}
+
 #[test_case(
     "abc",
     "Invalid cookie format 'abc'. Expected 'NAME=VALUE' or '@filename' for cookie file.\n";
@@ -2058,6 +2144,306 @@ fn test_cookie_jar_sends_cookies() {
     std::fs::remove_file(&cookie_jar).ok();
 
     server.assert_requests(2);
+}
+
+fn run_orb_with_cookie_jar(
+    url: &str,
+    cookie_jar: &Path,
+    connect_to_rules: &[String],
+) -> std::process::Output {
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(url).arg("-c").arg(cookie_jar);
+    for rule in connect_to_rules {
+        cmd.arg("--connect-to").arg(rule);
+    }
+    cmd.output().unwrap()
+}
+
+#[test]
+fn test_cookie_jar_rejects_cross_domain_set_cookie() {
+    let setter = TestServerBuilder::new().build();
+    setter.on_request_fn("/set", |_req| {
+        ResponseBuilder::new()
+            .status(200)
+            .header("Set-Cookie", "session=evil; Domain=.example.com; Path=/")
+            .body("set")
+            .build()
+    });
+
+    let checker = TestServerBuilder::new().build();
+    checker.on_request_fn("/check", |req| {
+        let leaked = req
+            .headers()
+            .get("cookie")
+            .map(|v| v.to_str().unwrap_or("").contains("session=evil"))
+            .unwrap_or(false);
+        if leaked {
+            ResponseBuilder::new().status(200).body("LEAKED").build()
+        } else {
+            ResponseBuilder::new().status(200).body("CLEAN").build()
+        }
+    });
+
+    let tmp = tempdir().unwrap();
+    let cookie_jar = tmp.path().join("cookies.txt");
+
+    let seed = run_orb_with_cookie_jar(
+        "http://attacker.com/set",
+        &cookie_jar,
+        &[format!("attacker.com:80:127.0.0.1:{}", setter.port())],
+    );
+    assert!(
+        seed.status.success(),
+        "Seed request failed: {}",
+        String::from_utf8_lossy(&seed.stderr)
+    );
+
+    let probe = run_orb_with_cookie_jar(
+        "http://example.com/check",
+        &cookie_jar,
+        &[format!("example.com:80:127.0.0.1:{}", checker.port())],
+    );
+    assert!(
+        probe.status.success(),
+        "Probe request failed: {}",
+        String::from_utf8_lossy(&probe.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&probe.stdout), "CLEAN");
+
+    setter.assert_requests(1);
+    checker.assert_requests(1);
+}
+
+#[test]
+fn test_cookie_jar_rejects_public_suffix_domain_cookie() {
+    let setter = TestServerBuilder::new().build();
+    setter.on_request_fn("/set", |_req| {
+        ResponseBuilder::new()
+            .status(200)
+            .header("Set-Cookie", "session=evil; Domain=.com; Path=/")
+            .body("set")
+            .build()
+    });
+
+    let checker = TestServerBuilder::new().build();
+    checker.on_request_fn("/check", |req| {
+        let leaked = req
+            .headers()
+            .get("cookie")
+            .map(|v| v.to_str().unwrap_or("").contains("session=evil"))
+            .unwrap_or(false);
+        if leaked {
+            ResponseBuilder::new().status(200).body("LEAKED").build()
+        } else {
+            ResponseBuilder::new().status(200).body("CLEAN").build()
+        }
+    });
+
+    let tmp = tempdir().unwrap();
+    let cookie_jar = tmp.path().join("cookies.txt");
+
+    let seed = run_orb_with_cookie_jar(
+        "http://example.com/set",
+        &cookie_jar,
+        &[format!("example.com:80:127.0.0.1:{}", setter.port())],
+    );
+    assert!(
+        seed.status.success(),
+        "Seed request failed: {}",
+        String::from_utf8_lossy(&seed.stderr)
+    );
+
+    let probe = run_orb_with_cookie_jar(
+        "http://other.com/check",
+        &cookie_jar,
+        &[format!("other.com:80:127.0.0.1:{}", checker.port())],
+    );
+    assert!(
+        probe.status.success(),
+        "Probe request failed: {}",
+        String::from_utf8_lossy(&probe.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&probe.stdout), "CLEAN");
+
+    setter.assert_requests(1);
+    checker.assert_requests(1);
+}
+
+#[test]
+fn test_cookie_jar_rejects_mixed_case_public_suffix_domain_cookie() {
+    let setter = TestServerBuilder::new().build();
+    setter.on_request_fn("/set", |_req| {
+        ResponseBuilder::new()
+            .status(200)
+            .header("Set-Cookie", "session=evil; Domain=Co.UK; Path=/")
+            .body("set")
+            .build()
+    });
+
+    let checker = TestServerBuilder::new().build();
+    checker.on_request_fn("/check", |req| {
+        let leaked = req
+            .headers()
+            .get("cookie")
+            .map(|v| v.to_str().unwrap_or("").contains("session=evil"))
+            .unwrap_or(false);
+        if leaked {
+            ResponseBuilder::new().status(200).body("LEAKED").build()
+        } else {
+            ResponseBuilder::new().status(200).body("CLEAN").build()
+        }
+    });
+
+    let tmp = tempdir().unwrap();
+    let cookie_jar = tmp.path().join("cookies.txt");
+
+    let seed = run_orb_with_cookie_jar(
+        "http://curl.co.uk/set",
+        &cookie_jar,
+        &[format!("curl.co.uk:80:127.0.0.1:{}", setter.port())],
+    );
+    assert!(
+        seed.status.success(),
+        "Seed request failed: {}",
+        String::from_utf8_lossy(&seed.stderr)
+    );
+
+    let probe = run_orb_with_cookie_jar(
+        "http://other.co.uk/check",
+        &cookie_jar,
+        &[format!("other.co.uk:80:127.0.0.1:{}", checker.port())],
+    );
+    assert!(
+        probe.status.success(),
+        "Probe request failed: {}",
+        String::from_utf8_lossy(&probe.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&probe.stdout), "CLEAN");
+
+    setter.assert_requests(1);
+    checker.assert_requests(1);
+}
+
+#[test]
+fn test_cookie_jar_accepts_parent_domain_cookie_for_subdomain() {
+    let setter = TestServerBuilder::new().build();
+    setter.on_request_fn("/set", |_req| {
+        ResponseBuilder::new()
+            .status(200)
+            .header("Set-Cookie", "session=good; Domain=.example.com; Path=/")
+            .body("set")
+            .build()
+    });
+
+    let checker = TestServerBuilder::new().build();
+    checker.on_request_fn("/check", |req| {
+        let has_cookie = req
+            .headers()
+            .get("cookie")
+            .map(|v| v.to_str().unwrap_or("").contains("session=good"))
+            .unwrap_or(false);
+        if has_cookie {
+            ResponseBuilder::new()
+                .status(200)
+                .body("COOKIE_PRESENT")
+                .build()
+        } else {
+            ResponseBuilder::new()
+                .status(200)
+                .body("COOKIE_MISSING")
+                .build()
+        }
+    });
+
+    let tmp = tempdir().unwrap();
+    let cookie_jar = tmp.path().join("cookies.txt");
+
+    let seed = run_orb_with_cookie_jar(
+        "http://sub.example.com/set",
+        &cookie_jar,
+        &[format!("sub.example.com:80:127.0.0.1:{}", setter.port())],
+    );
+    assert!(
+        seed.status.success(),
+        "Seed request failed: {}",
+        String::from_utf8_lossy(&seed.stderr)
+    );
+
+    let probe = run_orb_with_cookie_jar(
+        "http://api.example.com/check",
+        &cookie_jar,
+        &[format!("api.example.com:80:127.0.0.1:{}", checker.port())],
+    );
+    assert!(
+        probe.status.success(),
+        "Probe request failed: {}",
+        String::from_utf8_lossy(&probe.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&probe.stdout), "COOKIE_PRESENT");
+
+    setter.assert_requests(1);
+    checker.assert_requests(1);
+}
+
+#[test]
+fn test_cookie_jar_host_only_cookie_not_sent_to_sibling_subdomain() {
+    let setter = TestServerBuilder::new().build();
+    setter.on_request_fn("/set", |_req| {
+        ResponseBuilder::new()
+            .status(200)
+            .header("Set-Cookie", "session=hostonly; Path=/")
+            .body("set")
+            .build()
+    });
+
+    let checker = TestServerBuilder::new().build();
+    checker.on_request_fn("/check", |req| {
+        let has_cookie = req
+            .headers()
+            .get("cookie")
+            .map(|v| v.to_str().unwrap_or("").contains("session=hostonly"))
+            .unwrap_or(false);
+        if has_cookie {
+            ResponseBuilder::new()
+                .status(200)
+                .body("COOKIE_PRESENT")
+                .build()
+        } else {
+            ResponseBuilder::new()
+                .status(200)
+                .body("COOKIE_MISSING")
+                .build()
+        }
+    });
+
+    let tmp = tempdir().unwrap();
+    let cookie_jar = tmp.path().join("cookies.txt");
+
+    let seed = run_orb_with_cookie_jar(
+        "http://sub.example.com/set",
+        &cookie_jar,
+        &[format!("sub.example.com:80:127.0.0.1:{}", setter.port())],
+    );
+    assert!(
+        seed.status.success(),
+        "Seed request failed: {}",
+        String::from_utf8_lossy(&seed.stderr)
+    );
+
+    let probe = run_orb_with_cookie_jar(
+        "http://api.example.com/check",
+        &cookie_jar,
+        &[format!("api.example.com:80:127.0.0.1:{}", checker.port())],
+    );
+    assert!(
+        probe.status.success(),
+        "Probe request failed: {}",
+        String::from_utf8_lossy(&probe.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&probe.stdout), "COOKIE_MISSING");
+
+    setter.assert_requests(1);
+    checker.assert_requests(1);
 }
 
 #[test_case(
