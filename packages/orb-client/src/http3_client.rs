@@ -138,6 +138,19 @@ async fn connect_h3(
 
 /// Send an HTTP/3 request with redirect handling
 pub async fn send_http3_request(builder: RequestBuilder) -> Result<Response, OrbError> {
+    let max_time = builder.max_time;
+
+    if let Some(max_time) = max_time {
+        match timeout(max_time, send_http3_request_inner(builder)).await {
+            Ok(result) => result,
+            Err(_) => Err(OrbError::Timeout { timeout: max_time }),
+        }
+    } else {
+        send_http3_request_inner(builder).await
+    }
+}
+
+async fn send_http3_request_inner(builder: RequestBuilder) -> Result<Response, OrbError> {
     let mut current_url = builder.url.clone();
     let mut current_method = builder.method.clone();
     let mut current_body = builder.body.clone();
