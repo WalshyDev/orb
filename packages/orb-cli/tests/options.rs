@@ -2400,6 +2400,94 @@ fn test_redirect_strips_auth_cross_host() {
     server_b.assert_requests(1);
 }
 
+/// Test that Cookie header is stripped on cross-host redirect
+#[test]
+fn test_redirect_strips_cookie_cross_host() {
+    let server_b = TestServerBuilder::new().build();
+    server_b.on_request_fn("/target", |req| {
+        let has_cookie = req.header("cookie").is_some();
+        if has_cookie {
+            ResponseBuilder::new()
+                .status(200)
+                .body("FAIL: Cookie header leaked")
+                .build()
+        } else {
+            ResponseBuilder::new()
+                .status(200)
+                .body("OK: no cookie header")
+                .build()
+        }
+    });
+
+    let server_a = TestServerBuilder::new().build();
+    let redirect_target = server_b.url("/target");
+    server_a
+        .on_request("/start")
+        .respond_with_redirect(302, &redirect_target);
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server_a.url("/start"))
+        .arg("-b")
+        .arg("session=secret")
+        .arg("-L");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "OK: no cookie header");
+
+    server_a.assert_requests(1);
+    server_b.assert_requests(1);
+}
+
+/// Test that Cookie header is stripped on cross-host redirect for HTTP/3
+#[test]
+fn test_http3_redirect_strips_cookie_cross_host() {
+    let server_b = TestServerBuilder::new()
+        .with_protocols(&[HttpProtocol::Http3])
+        .build();
+    server_b.on_request_fn("/target", |req| {
+        let has_cookie = req.header("cookie").is_some();
+        if has_cookie {
+            ResponseBuilder::new()
+                .status(200)
+                .body("FAIL: Cookie header leaked")
+                .build()
+        } else {
+            ResponseBuilder::new()
+                .status(200)
+                .body("OK: no cookie header")
+                .build()
+        }
+    });
+
+    let server_a = TestServerBuilder::new()
+        .with_protocols(&[HttpProtocol::Http3])
+        .build();
+    let redirect_target = server_b.url("/target");
+    server_a
+        .on_request("/start")
+        .respond_with_redirect(302, &redirect_target);
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server_a.url("/start"))
+        .arg("-b")
+        .arg("session=secret")
+        .arg("-L")
+        .arg("--http3")
+        .arg("--insecure")
+        .arg("--max-time")
+        .arg("10");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "OK: no cookie header");
+
+    server_a.assert_requests(1);
+    server_b.assert_requests(1);
+}
+
 /// Test that Authorization header is preserved on same-host redirect
 #[test]
 fn test_redirect_preserves_auth_same_host() {

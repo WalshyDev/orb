@@ -664,11 +664,14 @@ fn is_cross_host(original: &http::Uri, redirect: &http::Uri) -> bool {
     orig_port != redir_port
 }
 
-/// Clone headers but remove the Authorization header
+/// Clone headers but remove sensitive credentials for cross-host redirects.
 fn strip_sensitive_headers(headers: &HeaderMap) -> HeaderMap {
     let mut filtered = HeaderMap::new();
     for (key, value) in headers.iter() {
-        if key == http::header::AUTHORIZATION {
+        if key == http::header::AUTHORIZATION
+            || key == http::header::COOKIE
+            || key == http::header::PROXY_AUTHORIZATION
+        {
             continue;
         }
         filtered.append(key.clone(), value.clone());
