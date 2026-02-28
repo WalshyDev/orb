@@ -152,20 +152,29 @@ fn parse_netscape_line_for_url(line: &str, url: &Url) -> Option<String> {
         return None;
     }
 
-    let domain = parts[0];
+    let mut domain = parts[0].trim().to_ascii_lowercase();
+    let domain_flag = parts[1] == "TRUE";
+    if domain_flag && !domain.starts_with('.') {
+        domain = format!(".{}", domain);
+    }
     let path = parts[2];
     let secure = parts[3] == "TRUE";
     let name = parts[5];
     let value = parts[6];
 
     // Check if cookie matches the URL
-    let url_host = url.host_str().unwrap_or("");
+    let url_host = url.host_str().unwrap_or("").to_ascii_lowercase();
     let url_path = url.path();
     let is_https = url.scheme() == "https";
 
+    // Reject domain cookies scoped to public suffixes (defense in depth).
+    if domain.starts_with('.') && psl::domain_str(domain.trim_start_matches('.')).is_none() {
+        return None;
+    }
+
     // Domain matching: cookie domain should match or be a suffix of URL host
-    let domain_matches = if domain.starts_with('.') {
-        url_host.ends_with(domain) || url_host == &domain[1..]
+    let domain_matches = if let Some(suffix) = domain.strip_prefix('.') {
+        url_host == suffix || url_host.ends_with(&format!(".{}", suffix))
     } else {
         url_host == domain
     };
