@@ -335,13 +335,13 @@ impl RouteBuilder {
     }
 
     /// Register the route with the server and return self for chaining
-    fn register_and_return_self(self) -> Self {
+    fn register_and_return_self(mut self) -> Self {
         if let Some(ref state) = self.server_state {
             let route = Route::new(
                 self.path.clone(),
                 self.method.clone(),
                 self.handler.clone().expect("Handler must be set"),
-                Vec::new(), // Assertions are stored in the registered route
+                std::mem::take(&mut self.assertions),
             );
             state.add_route(Arc::new(route));
         }
