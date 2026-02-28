@@ -154,14 +154,6 @@ impl ServerState {
         self.default_response.clone()
     }
 
-    /// Set the default response for unmatched requests
-    #[allow(dead_code)]
-    pub fn set_default_response(&self, response: Response) {
-        // Note: This requires interior mutability, but for simplicity
-        // we'll just handle unmatched routes with 404
-        let _ = response;
-    }
-
     /// Get all registered routes
     #[allow(dead_code)]
     pub fn routes(&self) -> Vec<Arc<Route>> {
