@@ -20,10 +20,7 @@ pub fn build_headers(args: &Args, url: &Url) -> HeaderMap {
 
     // --json sets Accept: application/json (matching cURL behavior)
     if args.json.is_some() {
-        headers.insert(
-            header::ACCEPT,
-            HeaderValue::from_static("application/json"),
-        );
+        headers.insert(header::ACCEPT, HeaderValue::from_static("application/json"));
     }
 
     // Accept-Encoding (compression)
