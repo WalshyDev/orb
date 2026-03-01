@@ -1,6 +1,6 @@
 [package]
 name = "orb-mockhttp"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Daniel Walsh <orb@walshy.dev>"]
 description = "Mock HTTP server for testing - supports HTTP/1.1, HTTP/2, and HTTP/3"
