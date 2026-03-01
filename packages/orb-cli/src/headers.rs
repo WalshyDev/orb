@@ -92,13 +92,36 @@ pub fn build_headers(args: &Args, url: &Url) -> HeaderMap {
         }
     }
 
-    // Finally, custom headers can override any of the above
+    // Finally, custom headers can override or remove any of the above.
+    // Matches cURL behavior:
+    //   -H "Name: value"  → set header
+    //   -H "Name:"        → remove header (colon with empty value)
+    //   -H "Name"         → remove header (no colon)
+    //   -H "Name;"        → send header with empty value
     for header_str in &args.headers {
-        if let Some((key, value)) = header_str.split_once(":")
-            && let Ok(header_name) = key.trim().parse::<HeaderName>()
-            && let Ok(header_value) = HeaderValue::from_str(value.trim())
-        {
-            headers.insert(header_name, header_value);
+        if let Some((key, value)) = header_str.split_once(':') {
+            let name = key.trim();
+            let value = value.trim();
+            if let Ok(header_name) = name.parse::<HeaderName>() {
+                if value.is_empty() {
+                    // "Header:" with empty value → remove the header
+                    headers.remove(&header_name);
+                } else if let Ok(header_value) = HeaderValue::from_str(value) {
+                    headers.insert(header_name, header_value);
+                }
+            }
+        } else if let Some(name) = header_str.strip_suffix(';') {
+            // "Header;" → send with empty value
+            let name = name.trim();
+            if let Ok(header_name) = name.parse::<HeaderName>() {
+                headers.insert(header_name, HeaderValue::from_static(""));
+            }
+        } else {
+            // "Header" (no colon, no semicolon) → remove the header
+            let name = header_str.trim();
+            if let Ok(header_name) = name.parse::<HeaderName>() {
+                headers.remove(&header_name);
+            }
         }
     }
 

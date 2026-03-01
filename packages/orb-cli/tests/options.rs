@@ -128,6 +128,75 @@ fn test_headers(headers: Vec<&str>) {
     server.assert_requests(1);
 }
 
+// Test -H "Header:" removes a default header (cURL compat)
+#[test]
+fn test_header_removal_with_colon() {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test"))
+        .arg("-H")
+        .arg("Accept:");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        !request.to_lowercase().contains("accept:"),
+        "Accept header should have been removed, but found in request: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
+// Test -H "Header" (no colon) removes a default header (cURL compat)
+#[test]
+fn test_header_removal_without_colon() {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test"))
+        .arg("-H")
+        .arg("Accept");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        !request.to_lowercase().contains("accept:"),
+        "Accept header should have been removed, but found in request: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
+// Test -H "Header;" sends header with empty value (cURL compat)
+#[test]
+fn test_header_empty_value_with_semicolon() {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test"))
+        .arg("-H")
+        .arg("X-Custom;");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.to_lowercase().contains("x-custom:"),
+        "Expected X-Custom header (with empty value) in request: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
 #[test_case("simple data", "simple data"; "simple data")]
 #[test_case("@tests/testdata/test_data.txt", "This is test data from file"; "data from file")]
 fn test_data(data: &str, expected_body: &str) {
