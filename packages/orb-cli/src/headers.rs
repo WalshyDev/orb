@@ -18,6 +18,14 @@ pub fn build_headers(args: &Args, url: &Url) -> HeaderMap {
     let host_header = build_host_header(url);
     headers.insert(header::HOST, HeaderValue::from_str(&host_header).unwrap());
 
+    // --json sets Accept: application/json (matching cURL behavior)
+    if args.json.is_some() {
+        headers.insert(
+            header::ACCEPT,
+            HeaderValue::from_static("application/json"),
+        );
+    }
+
     // Accept-Encoding (compression)
     if args.compressed {
         headers.insert(
