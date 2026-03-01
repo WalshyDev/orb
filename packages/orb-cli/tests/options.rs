@@ -423,8 +423,45 @@ fn test_json() {
         request
     );
     assert!(
+        request
+            .to_lowercase()
+            .contains("accept: application/json"),
+        "Expected Accept: application/json header in request: {}",
+        request
+    );
+    assert!(
         request.contains(r#"{"key":"value"}"#),
         "Expected JSON body in request: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
+// Test that --json sets Accept: application/json but a manual -H can override it
+#[test]
+fn test_json_accept_header_can_be_overridden() {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test"))
+        .arg("--json")
+        .arg(r#"{"key":"value"}"#)
+        .arg("-H")
+        .arg("Accept: text/plain");
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.to_lowercase().contains("accept: text/plain"),
+        "Expected overridden Accept: text/plain in request: {}",
+        request
+    );
+    assert!(
+        !request.to_lowercase().contains("accept: application/json"),
+        "Accept: application/json should have been overridden, got: {}",
         request
     );
     server.assert_requests(1);
