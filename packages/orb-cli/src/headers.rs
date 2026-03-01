@@ -115,33 +115,37 @@ fn build_host_header(url: &Url) -> String {
     host
 }
 
-/// Get the cookie header value from the --cookie argument
-/// Handles both inline cookies ("name=value") and file references ("@filename")
+/// Get the cookie header value from the --cookie argument.
+///
+/// Matches cURL behavior: if the argument contains '=', it's an inline cookie
+/// string. Otherwise it's a filename to read Netscape-format cookies from
+/// (with or without a leading '@' prefix for backward compatibility).
 fn get_cookie_header_value(cookie_arg: &str, url: &Url) -> String {
-    if let Some(file_path) = cookie_arg.strip_prefix('@') {
-        // Load from file and extract cookies for this URL
-        if let Ok(content) = std::fs::read_to_string(file_path) {
-            let mut cookies = Vec::new();
-            for line in content.lines() {
-                if line.starts_with('#') || line.trim().is_empty() {
-                    continue;
-                }
-                if let Some(cookie) = parse_netscape_line_for_url(line, url) {
-                    cookies.push(cookie);
-                }
+    if cookie_arg.contains('=') && !cookie_arg.starts_with('@') {
+        // Inline cookie string
+        return cookie_arg.to_string();
+    }
+
+    // Treat as file path — strip optional '@' prefix
+    let file_path = cookie_arg.strip_prefix('@').unwrap_or(cookie_arg);
+    if let Ok(content) = std::fs::read_to_string(file_path) {
+        let mut cookies = Vec::new();
+        for line in content.lines() {
+            if line.starts_with('#') || line.trim().is_empty() {
+                continue;
             }
-            if cookies.is_empty() {
-                // Not Netscape format, treat as raw cookie
-                content.trim().to_string()
-            } else {
-                cookies.join("; ")
+            if let Some(cookie) = parse_netscape_line_for_url(line, url) {
+                cookies.push(cookie);
             }
+        }
+        if cookies.is_empty() {
+            // Not Netscape format, treat as raw cookie
+            content.trim().to_string()
         } else {
-            String::new()
+            cookies.join("; ")
         }
     } else {
-        // Inline cookie string
-        cookie_arg.to_string()
+        String::new()
     }
 }
 

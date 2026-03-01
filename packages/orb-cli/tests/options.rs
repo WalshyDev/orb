@@ -1900,7 +1900,7 @@ fn test_cookie(cookie_arg: &str, expected_cookie: &str) {
     server.assert_requests(1);
 }
 
-// Test --cookie loading from Netscape cookie file
+// Test --cookie loading from Netscape cookie file with @ prefix
 // The cookies.txt file has cookies for .example.com domain
 // We use --connect-to to redirect example.com to our mock server
 #[test]
@@ -1913,6 +1913,37 @@ fn test_cookie_from_file() {
     cmd.arg(format!("http://example.com:{}/test", port))
         .arg("-b")
         .arg("@tests/testdata/cookies.txt")
+        .arg("--connect-to")
+        .arg(format!("example.com:{}:127.0.0.1:{}", port, port));
+
+    let output = cmd.output().unwrap();
+    assert!(
+        output.status.success(),
+        "Command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request.to_lowercase().contains("cookie:"),
+        "Expected Cookie header in request: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
+// Test --cookie loading from Netscape cookie file WITHOUT @ prefix (cURL compat)
+// cURL treats any -b argument without '=' as a filename
+#[test]
+fn test_cookie_from_file_without_at_prefix() {
+    let server = TestServerBuilder::new().build();
+    let port = server.port();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(format!("http://example.com:{}/test", port))
+        .arg("-b")
+        .arg("tests/testdata/cookies.txt")
         .arg("--connect-to")
         .arg(format!("example.com:{}:127.0.0.1:{}", port, port));
 
@@ -2018,13 +2049,18 @@ fn test_cookie_from_file_handles_very_long_line() {
 
 #[test_case(
     "abc",
-    "Invalid cookie format 'abc'. Expected 'NAME=VALUE' or '@filename' for cookie file.\n";
-    "invalid cookie format"
+    "Failed to read cookie file 'abc': No such file or directory (os error 2)\n";
+    "no equals sign treated as filename"
 )]
 #[test_case(
     "@tests/testdata/does-not-exist.txt",
     "Failed to read cookie file 'tests/testdata/does-not-exist.txt': No such file or directory (os error 2)\n";
-    "file not found"
+    "file not found with at prefix"
+)]
+#[test_case(
+    "tests/testdata/does-not-exist.txt",
+    "Failed to read cookie file 'tests/testdata/does-not-exist.txt': No such file or directory (os error 2)\n";
+    "file not found without at prefix"
 )]
 fn test_cookie_invalid(cookie_arg: &str, expected_error: &str) {
     let mut cmd = Command::new(cargo_bin!("orb"));

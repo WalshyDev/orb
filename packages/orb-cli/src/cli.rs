@@ -372,19 +372,21 @@ fn diagnose_connect_to_error(rule: &str) -> String {
 }
 
 /// Validate --cookie argument if provided
+///
+/// Matches cURL behavior: if the argument contains '=', it's treated as an
+/// inline cookie string. Otherwise it's treated as a filename to read cookies
+/// from (with or without a leading '@').
 pub fn validate_cookie(cookie: Option<&String>) {
     if let Some(cookie_arg) = cookie {
-        if let Some(file_path) = cookie_arg.strip_prefix('@') {
-            // It's a file reference, check if file exists
-            if let Err(e) = fs::read(file_path) {
-                crate::fatal!("Failed to read cookie file '{}': {}", file_path, e);
-            }
-        } else if !cookie_arg.contains('=') {
-            // Not a file and not in NAME=VALUE format
-            crate::fatal!(
-                "Invalid cookie format '{}'. Expected 'NAME=VALUE' or '@filename' for cookie file.",
-                cookie_arg
-            );
+        // If it contains '=', it's an inline cookie string — no validation needed
+        if cookie_arg.contains('=') {
+            return;
+        }
+
+        // Otherwise treat as a file path (strip optional '@' prefix for compat)
+        let file_path = cookie_arg.strip_prefix('@').unwrap_or(cookie_arg);
+        if let Err(e) = fs::read(file_path) {
+            crate::fatal!("Failed to read cookie file '{}': {}", file_path, e);
         }
     }
 }
