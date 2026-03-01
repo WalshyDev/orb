@@ -135,9 +135,7 @@ fn test_header_removal_with_colon() {
     server.on_request("/test").respond_with(200, "OK");
 
     let mut cmd = Command::new(cargo_bin!("orb"));
-    cmd.arg(server.url("/test"))
-        .arg("-H")
-        .arg("Accept:");
+    cmd.arg(server.url("/test")).arg("-H").arg("Accept:");
 
     let output = cmd.output().unwrap();
     assert!(output.status.success());
@@ -158,9 +156,7 @@ fn test_header_removal_without_colon() {
     server.on_request("/test").respond_with(200, "OK");
 
     let mut cmd = Command::new(cargo_bin!("orb"));
-    cmd.arg(server.url("/test"))
-        .arg("-H")
-        .arg("Accept");
+    cmd.arg(server.url("/test")).arg("-H").arg("Accept");
 
     let output = cmd.output().unwrap();
     assert!(output.status.success());
@@ -181,9 +177,7 @@ fn test_header_empty_value_with_semicolon() {
     server.on_request("/test").respond_with(200, "OK");
 
     let mut cmd = Command::new(cargo_bin!("orb"));
-    cmd.arg(server.url("/test"))
-        .arg("-H")
-        .arg("X-Custom;");
+    cmd.arg(server.url("/test")).arg("-H").arg("X-Custom;");
 
     let output = cmd.output().unwrap();
     assert!(output.status.success());
@@ -423,9 +417,7 @@ fn test_json() {
         request
     );
     assert!(
-        request
-            .to_lowercase()
-            .contains("accept: application/json"),
+        request.to_lowercase().contains("accept: application/json"),
         "Expected Accept: application/json header in request: {}",
         request
     );
