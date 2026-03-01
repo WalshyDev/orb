@@ -467,6 +467,58 @@ fn test_json_accept_header_can_be_overridden() {
     server.assert_requests(1);
 }
 
+// Test --json @file reads JSON from a file (cURL compat)
+#[test]
+fn test_json_from_file() {
+    let server = TestServerBuilder::new().build();
+    server.on_request("/test").respond_with(200, "OK");
+
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg(server.url("/test"))
+        .arg("--json")
+        .arg("@tests/testdata/test_data.json");
+
+    let output = cmd.output().unwrap();
+    assert!(
+        output.status.success(),
+        "Command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let request = server.get_raw_request().unwrap();
+    assert!(
+        request
+            .to_lowercase()
+            .contains("content-type: application/json"),
+        "Expected Content-Type: application/json in request: {}",
+        request
+    );
+    assert!(
+        request.contains(r#"{"from_file":true,"message":"hello"}"#),
+        "Expected JSON file content in request body: {}",
+        request
+    );
+    server.assert_requests(1);
+}
+
+// Test --json @nonexistent gives a clear error
+#[test]
+fn test_json_from_file_not_found() {
+    let mut cmd = Command::new(cargo_bin!("orb"));
+    cmd.arg("http://example.com/")
+        .arg("--json")
+        .arg("@tests/testdata/does-not-exist.json");
+
+    let output = cmd.output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Failed to read JSON from file"),
+        "Expected file-not-found error, got: {}",
+        stderr
+    );
+}
+
 #[test_case(
     "-F field1=value1",
     "--<BOUNDARY>\n\

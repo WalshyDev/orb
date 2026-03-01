@@ -99,12 +99,17 @@ async fn build_body(args: &Args) -> (RequestBody, Option<HeaderValue>) {
         );
     }
 
-    // --json: JSON body
+    // --json: JSON body (supports @file syntax like cURL)
     if let Some(ref json_data) = args.json {
-        return (
-            RequestBody::from_bytes(json_data.clone()),
-            Some(HeaderValue::from_static("application/json")),
-        );
+        let body = if let Some(file_path) = json_data.strip_prefix('@') {
+            let file_content = std::fs::read(file_path).unwrap_or_else(|err| {
+                fatal!("Failed to read JSON from file '{}': {}", file_path, err);
+            });
+            RequestBody::from_bytes(file_content)
+        } else {
+            RequestBody::from_bytes(json_data.clone())
+        };
+        return (body, Some(HeaderValue::from_static("application/json")));
     }
 
     // -F/--form: multipart form data
