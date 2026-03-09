@@ -34,7 +34,7 @@ rustls-pemfile = "2.2"
 tokio-rustls = "0.26"
 
 # Async runtime
-tokio = { version = "1.49.0", features = ["rt", "net", "io-util", "time", "sync", "macros"] }
+tokio = { version = "1.50.0", features = ["rt", "net", "io-util", "time", "sync", "macros"] }
 tokio-stream = "0.1.18"
 futures-util = "0.3"
 

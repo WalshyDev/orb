@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 # Async runtime
-tokio = { version = "1.49.0", features = ["net", "io-util", "time"] }
+tokio = { version = "1.50.0", features = ["net", "io-util", "time"] }
 futures-util = "0.3"
 pin-project = "1.1"
 
